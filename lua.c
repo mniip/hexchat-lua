@@ -41,7 +41,7 @@ inline script_info *get_info(lua_State *L)
 	return info;
 }
 
-int api_hexchat_register(lua_State *L)
+static int api_hexchat_register(lua_State *L)
 {
 	script_info *info = get_info(L);
 	if(info->name)
@@ -55,7 +55,7 @@ int api_hexchat_register(lua_State *L)
 	return 0;
 }
 
-int api_hexchat_command(lua_State *L)
+static int api_hexchat_command(lua_State *L)
 {
 	hexchat_command(ph, luaL_checkstring(L, 1));
 	return 0;
@@ -85,7 +85,7 @@ static int tostring(lua_State *L, int n)
 	return 1;
 }
 
-int api_hexchat_print(lua_State *L)
+static int api_hexchat_print(lua_State *L)
 {
 	int args = lua_gettop(L);
 	luaL_Buffer b;
@@ -103,13 +103,13 @@ int api_hexchat_print(lua_State *L)
 	return 0;
 }
 
-int api_hexchat_emit_print(lua_State *L)
+static int api_hexchat_emit_print(lua_State *L)
 {
 	hexchat_emit_print(ph, luaL_checkstring(L, 1), luaL_optstring(L, 2, NULL), luaL_optstring(L, 3, NULL), luaL_optstring(L, 4, NULL), luaL_optstring(L, 5, NULL), luaL_optstring(L, 6, NULL), NULL);
 	return 0;
 }
 
-int api_hexchat_send_modes(lua_State *L)
+static int api_hexchat_send_modes(lua_State *L)
 {
 	luaL_checktype(L, 1, LUA_TTABLE);
 	size_t n = lua_objlen(L, 1);
@@ -131,13 +131,13 @@ int api_hexchat_send_modes(lua_State *L)
 	return 0;
 }
 
-int api_hexchat_nickcmp(lua_State *L)
+static int api_hexchat_nickcmp(lua_State *L)
 {
 	lua_pushnumber(L, hexchat_nickcmp(ph, luaL_checkstring(L, 1), luaL_checkstring(L, 2)));
 	return 1;
 }
 
-int api_hexchat_strip(lua_State *L)
+static int api_hexchat_strip(lua_State *L)
 {
 	size_t len;
 	luaL_checktype(L, 1, LUA_TSTRING);
@@ -154,6 +154,138 @@ int api_hexchat_strip(lua_State *L)
 	return 0;
 }
 
+static int api_hexchat_info_meta_index(lua_State *L)
+{
+	char const *key = luaL_checkstring(L, 2);
+	char const *data = hexchat_get_info(ph, key);
+	if(data)
+	{
+		if(!strcmp(key, "gtkwin_ptr") || !strcmp(key, "win_ptr"))
+			lua_pushlightuserdata(L, (void *)data);
+		else
+			lua_pushstring(L, data);
+		return 1;
+	}
+	return 0;
+}
+
+static int api_hexchat_info_meta_newindex(lua_State *L)
+{
+	return luaL_error(L, "hexchat.info is read-only");
+}
+
+static int api_hexchat_prefs_meta_index(lua_State *L)
+{
+	char const *key = luaL_checkstring(L, 2);
+	char const *string;
+	int number;
+	int ret = hexchat_get_prefs(ph, key, &string, &number);
+	switch(ret)
+	{
+		case 0:
+			lua_pushnil(L);
+			return 1;
+		case 1:
+			lua_pushstring(L, string);
+			return 1;
+		case 2:
+			lua_pushnumber(L, number);
+			return 1;
+		case 3:
+			lua_pushboolean(L, number);
+			return 1;
+		default:
+			return 0;
+	}
+}
+
+static int api_hexchat_prefs_meta_newindex(lua_State *L)
+{
+	return luaL_error(L, "hexchat.prefs is read-only");
+}
+
+static int api_hexchat_pluginprefs_meta_index(lua_State *L)
+{
+	char const *key = luaL_checkstring(L, 2);
+	char str[512];
+	if(hexchat_pluginpref_get_str(ph, key, str))
+	{
+		lua_pushstring(L, str);
+		return 1;
+	}
+	int r = hexchat_pluginpref_get_int(ph, key);
+	if(r != -1)
+	{
+		lua_pushnumber(L, r);
+		return 1;
+	}
+	lua_pushnil(L);
+	return 1;
+}
+
+static int api_hexchat_pluginprefs_meta_newindex(lua_State *L)
+{
+	char const *key = luaL_checkstring(L, 2);
+	switch(lua_type(L, 3))
+	{
+		case LUA_TSTRING:
+			hexchat_pluginpref_set_str(ph, key, lua_tostring(L, 3));
+			return 0;
+		case LUA_TNUMBER:
+			hexchat_pluginpref_set_int(ph, key, lua_tointeger(L, 3));
+			return 0;
+		case LUA_TNIL: case LUA_TNONE:
+			hexchat_pluginpref_delete(ph, key);
+			return 0;
+		default:
+			return luaL_argerror(L, 3, "expected string, number, or nil");
+	}
+}
+static int api_hexchat_pluginprefs_meta_pairs_closure(lua_State *L)
+{
+	char *dest = lua_touserdata(L, lua_upvalueindex(1));
+	if(dest && *dest)
+	{
+		char *key = dest;
+		dest = strchr(dest, ',');
+		if(dest)
+			*(dest++) = 0;
+		lua_pushlightuserdata(L, dest);
+		lua_replace(L, lua_upvalueindex(1));
+		lua_pushstring(L, key);
+		char str[512];
+		if(hexchat_pluginpref_get_str(ph, key, str))
+		{
+			lua_pushstring(L, str);
+			return 2;
+		}
+		int r = hexchat_pluginpref_get_int(ph, key);
+		if(r != -1)
+		{
+			lua_pushnumber(L, r);
+			return 2;
+		}
+		lua_pushnil(L);
+		return 2;
+	}
+	else
+	{
+		free(lua_touserdata(L, lua_upvalueindex(2)));
+		return 0;
+	}
+}
+
+static int api_hexchat_pluginprefs_meta_pairs(lua_State *L)
+{
+	char *dest = malloc(4096);
+	if(!hexchat_pluginpref_list(ph, dest))
+		strcpy(dest, "");
+	lua_pushlightuserdata(L, dest);
+	lua_pushlightuserdata(L, dest);
+	lua_pushcclosure(L, api_hexchat_pluginprefs_meta_pairs_closure, 2);
+	return 1;
+}
+
 luaL_reg api_hexchat[] = {
 	{"register", api_hexchat_register},
 	{"command", api_hexchat_command},
@@ -161,13 +293,30 @@ luaL_reg api_hexchat[] = {
 	{"emit_print", api_hexchat_emit_print},
 	{"send_modes", api_hexchat_send_modes},
 	{"nickcmp", api_hexchat_nickcmp},
-	{"strip", api_hexchat_strip},
+	{"strip", api_hexchat_strip}
+};
+
+luaL_reg api_hexchat_info_meta[] = {
+	{"__index", api_hexchat_info_meta_index},
+	{"__newindex", api_hexchat_info_meta_newindex}
+};
+
+luaL_reg api_hexchat_prefs_meta[] = {
+	{"__index", api_hexchat_prefs_meta_index},
+	{"__newindex", api_hexchat_prefs_meta_newindex}
+};
+
+luaL_reg api_hexchat_pluginprefs_meta[] = {
+	{"__index", api_hexchat_pluginprefs_meta_index},
+	{"__newindex", api_hexchat_pluginprefs_meta_newindex},
+	{"__pairs", api_hexchat_pluginprefs_meta_pairs}
 };
 
 int luaopen_hexchat(lua_State *L)
 {
 	lua_newtable(L);
 	luaL_register(L, NULL, api_hexchat);
+
 	lua_pushnumber(L, HEXCHAT_PRI_HIGHEST); lua_setfield(L, -2, "PRI_HIGHEST");
 	lua_pushnumber(L, HEXCHAT_PRI_HIGH); lua_setfield(L, -2, "PRI_HIGH");
 	lua_pushnumber(L, HEXCHAT_PRI_NORM); lua_setfield(L, -2, "PRI_NORM");
@@ -177,7 +326,51 @@ int luaopen_hexchat(lua_State *L)
 	lua_pushnumber(L, HEXCHAT_EAT_HEXCHAT); lua_setfield(L, -2, "EAT_HEXCHAT");
 	lua_pushnumber(L, HEXCHAT_EAT_PLUGIN); lua_setfield(L, -2, "EAT_PLUGIN");
 	lua_pushnumber(L, HEXCHAT_EAT_ALL); lua_setfield(L, -2, "EAT_ALL");
+
+	lua_newtable(L);
+	lua_newtable(L);
+	luaL_register(L, NULL, api_hexchat_info_meta);
+	lua_setmetatable(L, -2);
+	lua_setfield(L, -2, "info");
+
+	lua_newtable(L);
+	lua_newtable(L);
+	luaL_register(L, NULL, api_hexchat_prefs_meta);
+	lua_setmetatable(L, -2);
+	lua_setfield(L, -2, "prefs");
+
+	lua_newtable(L);
+	lua_newtable(L);
+	luaL_register(L, NULL, api_hexchat_pluginprefs_meta);
+	lua_setmetatable(L, -2);
+	lua_setfield(L, -2, "pluginprefs");
+
 	return 1;
+}
+
+int pairs_closure(lua_State *L)
+{
+	lua_settop(L, 1);
+	if(luaL_getmetafield(L, 1, "__pairs"))
+	{
+		lua_insert(L, 1);
+		lua_call(L, 1, LUA_MULTRET);
+		return lua_gettop(L);
+	}
+	else
+	{
+		lua_pushvalue(L, lua_upvalueindex(1));
+		lua_insert(L, 1);
+		lua_call(L, 1, LUA_MULTRET);
+		return lua_gettop(L);
+	}
+}
+
+void patch_pairs(lua_State *L)
+{
+	lua_getglobal(L, "pairs");
+	lua_pushcclosure(L, pairs_closure, 1);
+	lua_setglobal(L, "pairs");
 }
 
 script_info **scripts = NULL;
@@ -237,6 +430,8 @@ static script_info *create_script(char const *file)
 		return NULL;
 	}
 	luaL_openlibs(L);
+	if(LUA_VERSION_NUM < 502)
+		patch_pairs(L);
 	lua_pushlightuserdata(L, info);
 	lua_setfield(L, LUA_REGISTRYINDEX, registry_field);
 	luaopen_hexchat(L);
