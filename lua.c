@@ -55,14 +55,128 @@ int api_hexchat_register(lua_State *L)
 	return 0;
 }
 
+int api_hexchat_command(lua_State *L)
+{
+	hexchat_command(ph, luaL_checkstring(L, 1));
+	return 0;
+}
+
+static int tostring(lua_State *L, int n)
+{
+	luaL_checkany(L, n);
+	switch (lua_type(L, n))
+	{
+		case LUA_TNUMBER:
+			lua_pushstring(L, lua_tostring(L, n));
+			break;
+		case LUA_TSTRING:
+			lua_pushvalue(L, n);
+			break;
+		case LUA_TBOOLEAN:
+			lua_pushstring(L, (lua_toboolean(L, n) ? "true" : "false"));
+			break;
+		case LUA_TNIL:
+			lua_pushliteral(L, "nil");
+			break;
+		default:
+			lua_pushfstring(L, "%s: %p", luaL_typename(L, n), lua_topointer(L, n));
+			break;
+	}
+	return 1;
+}
+
+int api_hexchat_print(lua_State *L)
+{
+	int args = lua_gettop(L);
+	luaL_Buffer b;
+	luaL_buffinit(L, &b);
+	int i;
+	for(i = 1; i <= args; i++)
+	{
+		if(i != 1)
+			luaL_addstring(&b, " ");
+		tostring(L, i);
+		luaL_addvalue(&b);
+	}
+	luaL_pushresult(&b);
+	hexchat_print(ph, lua_tostring(L, -1));
+	return 0;
+}
+
+int api_hexchat_emit_print(lua_State *L)
+{
+	hexchat_emit_print(ph, luaL_checkstring(L, 1), luaL_optstring(L, 2, NULL), luaL_optstring(L, 3, NULL), luaL_optstring(L, 4, NULL), luaL_optstring(L, 5, NULL), luaL_optstring(L, 6, NULL), NULL);
+	return 0;
+}
+
+int api_hexchat_send_modes(lua_State *L)
+{
+	luaL_checktype(L, 1, LUA_TTABLE);
+	size_t n = lua_objlen(L, 1);
+	char const *mode = luaL_checkstring(L, 2);
+	if(strlen(mode) != 2)
+		return luaL_argerror(L, 2, "expected sign followed by a mode letter");
+	int modes = luaL_optint(L, 3, 0);
+	const char *targets[n];
+	int i;
+	for(i = 0; i < n; i++)
+	{
+		lua_rawgeti(L, 1, i + 1);
+		if(lua_type(L, -1) != LUA_TSTRING)
+			return luaL_argerror(L, 1, "expected an array of strings");
+		targets[i] = lua_tostring(L, -1);
+		lua_pop(L, 1);
+	}
+	hexchat_send_modes(ph, targets, n, modes, mode[0], mode[1]);
+	return 0;
+}
+
+int api_hexchat_nickcmp(lua_State *L)
+{
+	lua_pushnumber(L, hexchat_nickcmp(ph, luaL_checkstring(L, 1), luaL_checkstring(L, 2)));
+	return 1;
+}
+
+int api_hexchat_strip(lua_State *L)
+{
+	size_t len;
+	luaL_checktype(L, 1, LUA_TSTRING);
+	char const *text = lua_tolstring(L, 1, &len);
+	int leave_colors = lua_toboolean(L, 2);
+	int leave_attrs = lua_toboolean(L, 2);
+	char *result = hexchat_strip(ph, text, len, (leave_colors ? 0 : 1) | (leave_attrs ? 0 : 2));
+	if(result)
+	{
+		lua_pushstring(L, result);
+		hexchat_free(ph, result);
+		return 1;
+	}
+	return 0;
+}
+
 luaL_reg api_hexchat[] = {
-	{"register", api_hexchat_register}
+	{"register", api_hexchat_register},
+	{"command", api_hexchat_command},
+	{"print", api_hexchat_print},
+	{"emit_print", api_hexchat_emit_print},
+	{"send_modes", api_hexchat_send_modes},
+	{"nickcmp", api_hexchat_nickcmp},
+	{"strip", api_hexchat_strip},
 };
 
 int luaopen_hexchat(lua_State *L)
 {
 	lua_newtable(L);
 	luaL_register(L, NULL, api_hexchat);
+	lua_pushnumber(L, HEXCHAT_PRI_HIGHEST); lua_setfield(L, -2, "PRI_HIGHEST");
+	lua_pushnumber(L, HEXCHAT_PRI_HIGH); lua_setfield(L, -2, "PRI_HIGH");
+	lua_pushnumber(L, HEXCHAT_PRI_NORM); lua_setfield(L, -2, "PRI_NORM");
+	lua_pushnumber(L, HEXCHAT_PRI_LOW); lua_setfield(L, -2, "PRI_LOW");
+	lua_pushnumber(L, HEXCHAT_PRI_LOWEST); lua_setfield(L, -2, "PRI_LOWEST");
+	lua_pushnumber(L, HEXCHAT_EAT_NONE); lua_setfield(L, -2, "EAT_NONE");
+	lua_pushnumber(L, HEXCHAT_EAT_HEXCHAT); lua_setfield(L, -2, "EAT_HEXCHAT");
+	lua_pushnumber(L, HEXCHAT_EAT_PLUGIN); lua_setfield(L, -2, "EAT_PLUGIN");
+	lua_pushnumber(L, HEXCHAT_EAT_ALL); lua_setfield(L, -2, "EAT_ALL");
 	return 1;
 }
 
