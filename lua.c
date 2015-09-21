@@ -22,6 +22,13 @@ hexchat_plugin *ph;
 #define ARRAY_GROW(A, N) ((N)++, ARRAY_RESIZE(A, N))
 #define ARRAY_SHRINK(A, N) ((N)--, ARRAY_RESIZE(A, N))
 
+inline char *copy_string(char const *str)
+{
+	char *mem = malloc(strlen(str) + 1);
+	strcpy(mem, str);
+	return mem;
+}
+
 typedef struct
 {
 	hexchat_hook *hook;
@@ -60,9 +67,9 @@ static int api_hexchat_register(lua_State *L)
 	char const *name = luaL_checkstring(L, 1);
 	char const *version = luaL_checkstring(L, 2);
 	char const *description = luaL_checkstring(L, 3);
-	info->name = strdup(name);
-	info->description = strdup(description);
-	info->version = strdup(version);
+	info->name = copy_string(name);
+	info->description = copy_string(description);
+	info->version = copy_string(version);
 	return 0;
 }
 
@@ -136,7 +143,7 @@ static int api_hexchat_send_modes(lua_State *L)
 		return luaL_argerror(L, 2, "expected sign followed by a mode letter");
 	int modes = luaL_optint(L, 3, 0);
 	const char *targets[n];
-	int i;
+	size_t i;
 	for(i = 0; i < n; i++)
 	{
 		lua_rawgeti(L, 1, i + 1);
@@ -190,12 +197,12 @@ static void free_hook(hook_info *hook)
 static int unregister_hook(hook_info *hook)
 {
 	script_info *info = get_info(hook->state);
-	int i;
+	size_t i;
 	for(i = 0; i < info->num_hooks; i++)
 		if(info->hooks[i] == hook)
 		{
 			free_hook(hook);
-			int j;
+			size_t j;
 			for(j = info->num_hooks - 1; j > i; j--)
 				info->hooks[j - 1] = info->hooks[j];
 			ARRAY_SHRINK(info->hooks, info->num_hooks);
@@ -889,7 +896,7 @@ static int is_lua_file(char const *file)
 {
 	char const *ext1 = ".lua";
 	char const *ext2 = ".luac";
-	return (strlen(file) >= strlen(ext1) && !strcasecmp(file + strlen(file) - strlen(ext1), ext1)) || (strlen(file) >= strlen(ext2) && !strcasecmp(file + strlen(file) - strlen(ext2), ext2));
+	return (strlen(file) >= strlen(ext1) && !strcmp(file + strlen(file) - strlen(ext1), ext1)) || (strlen(file) >= strlen(ext2) && !strcmp(file + strlen(file) - strlen(ext2), ext2));
 }
 
 void prepare_state(lua_State *L, script_info *info)
@@ -916,7 +923,7 @@ static script_info *create_script(char const *file)
 	info->name = info->description = info->version = NULL;
 	info->hooks = NULL;
 	info->num_hooks = 0;
-	info->filename = strdup(expand_path(file));
+	info->filename = copy_string(expand_path(file));
 	lua_State *L = luaL_newstate();
 	info->state = L;
 	if(!L)
@@ -940,7 +947,7 @@ static script_info *create_script(char const *file)
 	{
 		char const *error = lua_tostring(L, -1);
 		hexchat_printf(ph, "Lua error: %s", error ? error : "(non-string error)");
-		int i;
+		size_t i;
 		for(i = 0; i < info->num_hooks; i++)
 			free_hook(info->hooks[i]);
 		lua_close(L);
@@ -952,7 +959,7 @@ static script_info *create_script(char const *file)
 	if(!info->name)
 	{
 		hexchat_printf(ph, "Lua script didn't register with hexchat.register");
-		int i;
+		size_t i;
 		for(i = 0; i < info->num_hooks; i++)
 			free_hook(info->hooks[i]);
 		lua_close(L);
@@ -966,7 +973,7 @@ static script_info *create_script(char const *file)
 
 static void destroy_script(script_info *info)
 {
-	int i;
+	size_t i;
 	for(i = 0; i < info->num_hooks; i++)
 		free_hook(info->hooks[i]);
 	lua_State *L = info->state;
@@ -996,13 +1003,13 @@ static int load_script(char const *file)
 
 static int unload_script(char const *filename)
 {
-	int i;
+	size_t i;
 	char const *expanded = expand_path(filename);
 	for(i = 0; i < num_scripts; i++)
 		if(!strcmp(scripts[i]->filename, expanded))
 		{
 			destroy_script(scripts[i]);
-			int j;
+			size_t j;
 			for(j = num_scripts - 1; j > i; j--)
 				scripts[j - 1] = scripts[j];
 			ARRAY_SHRINK(scripts, num_scripts);
@@ -1040,7 +1047,7 @@ static void destroy_interpreter()
 {
 	if(interp)
 	{
-		int i;
+		size_t i;
 		for(i = 0; i < interp->num_hooks; i++)
 			free_hook(interp->hooks[i]);
 		lua_State *L = interp->state;
@@ -1099,7 +1106,7 @@ static int command_reload(char *word[], char *word_eol[], void *userdata)
 static int command_console_exec(char *word[], char *word_eol[], void *userdata)
 {
 	char const *channel = hexchat_get_info(ph, "channel");
-	if(channel && !strcasecmp(channel, console_tab))
+	if(channel && !strcmp(channel, console_tab))
 	{
 		if(interp)
 		{
@@ -1113,15 +1120,15 @@ static int command_console_exec(char *word[], char *word_eol[], void *userdata)
 
 static int command_lua(char *word[], char *word_eol[], void *userdata)
 {
-	if(!strcasecmp(word[2], "exec"))
+	if(!strcmp(word[2], "exec"))
 	{
 		if(interp)
 			inject_string(interp, word_eol[3]);
 	}
-	else if(!strcasecmp(word[2], "inject"))
+	else if(!strcmp(word[2], "inject"))
 	{
 		char const *expanded = expand_path(word[3]);
-		int i;
+		size_t i;
 		int found = 0;
 		for(i = 0; i < num_scripts; i++)
 			if(!strcmp(scripts[i]->filename, expanded))
@@ -1133,20 +1140,20 @@ static int command_lua(char *word[], char *word_eol[], void *userdata)
 		if(!found)
 			hexchat_printf(ph, "Could not find a script by the name '%s'", word[3]);
 	}
-	else if(!strcasecmp(word[2], "reload"))
+	else if(!strcmp(word[2], "reload"))
 	{
 		destroy_interpreter();
 		create_interpreter();
 	}
-	else if(!strcasecmp(word[2], "list"))
+	else if(!strcmp(word[2], "list"))
 	{
-		int i;
+		size_t i;
 		for(i = 0; i < num_scripts; i++)
 			hexchat_printf(ph, "%s %s: %s (%s)", scripts[i]->name, scripts[i]->version, scripts[i]->description, scripts[i]->filename);
 		if(interp)
 			hexchat_printf(ph, "%s %s", interp->name, plugin_version);
 	}
-	else if(!strcasecmp(word[2], "console"))
+	else if(!strcmp(word[2], "console"))
 	{
 		hexchat_commandf(ph, "query %s", console_tab);
 	}
@@ -1185,7 +1192,7 @@ int hexchat_plugin_init(hexchat_plugin *plugin_handle, char **name, char **descr
 int hexchat_plugin_deinit(hexchat_plugin *plugin_handle)
 {
 	destroy_interpreter();
-	int i;
+	size_t i;
 	for(i = 0; i < num_scripts; i++)
 		destroy_script(scripts[i]);
 	num_scripts = 0;

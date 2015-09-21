@@ -1,2 +1,23 @@
+CC ?= cc
+PKG_CONFIG ?= pkg-config
+
+CFLAGS ?= -O2 -ggdb
+
+CFLAGS += -std=c99 -fPIC -Wall -Wextra -pedantic
+CFLAGS += -Wno-unused-parameter
+
+CFLAGS += $(shell $(PKG_CONFIG) --cflags hexchat-plugin)
+CFLAGS += $(shell $(PKG_CONFIG) --cflags lua)
+
+LDFLAGS ?= -shared
+LIBS ?= $(shell $(PKG_CONFIG) --libs lua)
+
+OUTPUT = lua.so
+
+FILES = lua.c
+
 all:
-	gcc $(shell pkg-config --cflags hexchat-plugin) -fPIC -Wall -shared -o lua.so lua.c $(shell pkg-config --libs lua) 
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $(OUTPUT) $(FILES) $(LIBS)
+
+clean:
+	rm -f $(OUTPUT)
