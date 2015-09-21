@@ -226,10 +226,12 @@ static int api_command_closure(char *word[], char *word_eol[], void *udata)
 	if(lua_pcall(L, 2, 1, base))
 	{
 		char const *error = lua_tostring(L, -1);
-		hexchat_printf(ph, "\00320Lua error in command hook: %s", error ? error : "(non-string error)");
+		hexchat_printf(ph, "Lua error in command hook: %s", error ? error : "(non-string error)");
 		return HEXCHAT_EAT_NONE;
 	}
-	return lua_tointeger(L, -1);
+	int ret = lua_tointeger(L, -1);
+	lua_pop(L, 1);
+	return ret;
 }
 
 static int api_hexchat_hook_command(lua_State *L)
@@ -271,10 +273,12 @@ static int api_print_closure(char *word[], void *udata)
 	if(lua_pcall(L, 1, 1, base))
 	{
 		char const *error = lua_tostring(L, -1);
-		hexchat_printf(ph, "\00320Lua error in print hook: %s", error ? error : "(non-string error)");
+		hexchat_printf(ph, "Lua error in print hook: %s", error ? error : "(non-string error)");
 		return HEXCHAT_EAT_NONE;
 	}
-	return lua_tointeger(L, -1);
+	int ret = lua_tointeger(L, -1);
+	lua_pop(L, 1);
+	return ret;
 }
 
 static int api_hexchat_hook_print(lua_State *L)
@@ -319,10 +323,12 @@ static int api_print_attrs_closure(char *word[], hexchat_event_attrs *attrs, voi
 	if(lua_pcall(L, 2, 1, base))
 	{
 		char const *error = lua_tostring(L, -1);
-		hexchat_printf(ph, "\00320Lua error in print hook: %s", error ? error : "(non-string error)");
+		hexchat_printf(ph, "Lua error in print_attrs hook: %s", error ? error : "(non-string error)");
 		return HEXCHAT_EAT_NONE;
 	}
-	return lua_tointeger(L, -1);
+	int ret = lua_tointeger(L, -1);
+	lua_pop(L, 1);
+	return ret;
 }
 
 static int api_hexchat_hook_print_attrs(lua_State *L)
@@ -366,10 +372,12 @@ static int api_server_closure(char *word[], char *word_eol[], void *udata)
 	if(lua_pcall(L, 2, 1, base))
 	{
 		char const *error = lua_tostring(L, -1);
-		hexchat_printf(ph, "\00320Lua error in server hook: %s", error ? error : "(non-string error)");
+		hexchat_printf(ph, "Lua error in server hook: %s", error ? error : "(non-string error)");
 		return HEXCHAT_EAT_NONE;
 	}
-	return lua_tointeger(L, -1);
+	int ret = lua_tointeger(L, -1);
+	lua_pop(L, 1);
+	return ret;
 }
 
 static int api_hexchat_hook_server(lua_State *L)
@@ -417,10 +425,12 @@ static int api_server_attrs_closure(char *word[], char *word_eol[], hexchat_even
 	if(lua_pcall(L, 3, 1, base))
 	{
 		char const *error = lua_tostring(L, -1);
-		hexchat_printf(ph, "\00320Lua error in server hook: %s", error ? error : "(non-string error)");
+		hexchat_printf(ph, "Lua error in server_attrs hook: %s", error ? error : "(non-string error)");
 		return HEXCHAT_EAT_NONE;
 	}
-	return lua_tointeger(L, -1);
+	int ret = lua_tointeger(L, -1);
+	lua_pop(L, 1);
+	return ret;
 }
 
 static int api_hexchat_hook_server_attrs(lua_State *L)
@@ -451,10 +461,12 @@ static int api_timer_closure(void *udata)
 	if(lua_pcall(L, 0, 1, base))
 	{
 		char const *error = lua_tostring(L, -1);
-		hexchat_printf(ph, "\00320Lua error in timer hook: %s", error ? error : "(non-string error)");
+		hexchat_printf(ph, "Lua error in timer hook: %s", error ? error : "(non-string error)");
 		return 0;
 	}
-	return lua_toboolean(L, -1);
+	int ret = lua_toboolean(L, -1);
+	lua_pop(L, 1);
+	return ret;
 }
 
 static int api_hexchat_hook_timer(lua_State *L)
@@ -873,6 +885,20 @@ static int is_lua_file(char const *file)
 	return !strcasecmp(file + strlen(file) - strlen(ext1), ext1) || !strcasecmp(file + strlen(file) - strlen(ext2), ext2);
 }
 
+void prepare_state(lua_State *L, script_info *info)
+{
+	luaL_openlibs(L);
+	if(LUA_VERSION_NUM < 502)
+		patch_pairs(L);
+	lua_getglobal(L, "debug");
+	lua_getfield(L, -1, "traceback");
+	info->traceback = luaL_ref(L, LUA_REGISTRYINDEX);
+	lua_pushlightuserdata(L, info);
+	lua_setfield(L, LUA_REGISTRYINDEX, registry_field);
+	luaopen_hexchat(L);
+	lua_setglobal(L, "hexchat");
+}
+
 static script_info *create_script(char const *file)
 {
 	script_info *info = malloc(sizeof(script_info));
@@ -888,21 +914,12 @@ static script_info *create_script(char const *file)
 		free(info);
 		return NULL;
 	}
-	luaL_openlibs(L);
-	if(LUA_VERSION_NUM < 502)
-		patch_pairs(L);
-	lua_getglobal(L, "debug");
-	lua_getfield(L, -1, "traceback");
-	info->traceback = luaL_ref(L, LUA_REGISTRYINDEX);
-	lua_pushlightuserdata(L, info);
-	lua_setfield(L, LUA_REGISTRYINDEX, registry_field);
-	luaopen_hexchat(L);
-	lua_setglobal(L, "hexchat");
+	prepare_state(L, info);
 	lua_rawgeti(L, LUA_REGISTRYINDEX, info->traceback);
 	int base = lua_gettop(L);
 	if(luaL_loadfile(L, info->filename))
 	{
-		hexchat_printf(ph, "\00320Lua syntax error: %s", luaL_optstring(L, -1, ""));
+		hexchat_printf(ph, "Lua syntax error: %s", luaL_optstring(L, -1, ""));
 		lua_close(L);
 		free(info->filename);
 		free(info);
@@ -911,15 +928,22 @@ static script_info *create_script(char const *file)
 	if(lua_pcall(L, 0, 0, base))
 	{
 		char const *error = lua_tostring(L, -1);
-		hexchat_printf(ph, "\00320Lua error: %s", error ? error : "(non-string error)");
+		hexchat_printf(ph, "Lua error: %s", error ? error : "(non-string error)");
+		int i;
+		for(i = 0; i < info->num_hooks; i++)
+			free_hook(info->hooks[i]);
 		lua_close(L);
 		free(info->filename);
 		free(info);
 		return 0;
 	}
+	lua_pop(L, 1);
 	if(!info->name)
 	{
-		hexchat_printf(ph, "\00320Lua script didn't register with hexchat.register");
+		hexchat_printf(ph, "Lua script didn't register with hexchat.register");
+		int i;
+		for(i = 0; i < info->num_hooks; i++)
+			free_hook(info->hooks[i]);
 		lua_close(L);
 		free(info->filename);
 		free(info);
@@ -959,7 +983,6 @@ static int load_script(char const *file)
 	return 0;
 }
 
-
 static int unload_script(char const *filename)
 {
 	int i;
@@ -977,18 +1000,62 @@ static int unload_script(char const *filename)
 	return 0;
 }
 
-static void cleanup_scripts()
-{
-	int i;
-	for(i = 0; i < num_scripts; i++)
-		destroy_script(scripts[i]);
-	num_scripts = 0;
-	ARRAY_RESIZE(scripts, num_scripts);
-	free(expand_buffer);
-}
-
 static void autoload_scripts()
 {
+}
+
+script_info *interp = NULL;
+static void create_interpreter()
+{
+	interp = malloc(sizeof(script_info));
+	interp->name = "lua interpreter";
+	interp->description = "";
+	interp->version = "";
+	interp->hooks = NULL;
+	interp->num_hooks = 0;
+	interp->filename = "";
+	lua_State *L = luaL_newstate();
+	interp->state = L;
+	if(!L)
+	{
+		free(interp);
+		interp = NULL;
+		return;
+	}
+	prepare_state(L, interp);
+}
+
+static void destroy_interpreter()
+{
+	if(interp)
+	{
+		int i;
+		for(i = 0; i < interp->num_hooks; i++)
+			free_hook(interp->hooks[i]);
+		lua_State *L = interp->state;
+		lua_close(L);
+		free(interp);
+		interp = NULL;
+	}
+}
+
+static void inject_string(script_info *info, char const *line)
+{
+	lua_State *L = info->state;
+	lua_rawgeti(L, LUA_REGISTRYINDEX, info->traceback);
+	int base = lua_gettop(L);
+	if(luaL_loadbuffer(L, line, strlen(line), "@interpreter"))
+	{
+		hexchat_printf(ph, "Lua syntax error: %s", luaL_optstring(L, -1, ""));
+		return;
+	}
+	if(lua_pcall(L, 0, 0, base))
+	{
+		char const *error = lua_tostring(L, -1);
+		hexchat_printf(ph, "Lua error: %s", error ? error : "(non-string error)");
+		return;
+	}
+	lua_pop(L, 1);
 }
 
 static int command_load(char *word[], char *word_eol[], void *userdata)
@@ -1018,6 +1085,40 @@ static int command_reload(char *word[], char *word_eol[], void *userdata)
 		return HEXCHAT_EAT_NONE;
 }
 
+static int command_lua(char *word[], char *word_eol[], void *userdata)
+{
+	if(!strcasecmp(word[2], "exec"))
+	{
+		if(interp)
+			inject_string(interp, word_eol[3]);
+	}
+	else if(!strcasecmp(word[2], "inject"))
+	{
+		char const *expanded = expand_path(word[3]);
+		int i;
+		int found = 0;
+		for(i = 0; i < num_scripts; i++)
+			if(!strcmp(scripts[i]->filename, expanded))
+			{
+				inject_string(scripts[i], word_eol[4]);
+				found = 1;
+				break;
+			}
+		if(!found)
+			hexchat_printf(ph, "Could not find a script by the name '%s'", word[3]);
+	}
+	else if(!strcasecmp(word[2], "reload"))
+	{
+		destroy_interpreter();
+		create_interpreter();
+	}
+	else
+	{
+		hexchat_command(ph, "help lua");
+	}
+	return HEXCHAT_EAT_ALL;
+}
+
 int hexchat_plugin_init(hexchat_plugin *plugin_handle, char **name, char **description, char **version, char *arg)
 {
 	strcat(plugin_version, strchr(LUA_VERSION, ' ') + 1);
@@ -1031,9 +1132,11 @@ int hexchat_plugin_init(hexchat_plugin *plugin_handle, char **name, char **descr
 	hexchat_hook_command(ph, "LOAD", HEXCHAT_PRI_NORM, command_load, NULL, NULL);
 	hexchat_hook_command(ph, "UNLOAD", HEXCHAT_PRI_NORM, command_unload, NULL, NULL);
 	hexchat_hook_command(ph, "RELOAD", HEXCHAT_PRI_NORM, command_reload, NULL, NULL);
-	//hexchat_hook_command(ph, "lua", HEXCHAT_PRI_NORM, command_lua, NULL, NULL);
+	hexchat_hook_command(ph, "lua", HEXCHAT_PRI_NORM, command_lua, NULL, NULL);
 
 	hexchat_printf(ph, "%s version %s loaded.\n", plugin_name, plugin_version);
+
+	create_interpreter();
 
 	if(!arg)
 		autoload_scripts();
@@ -1042,7 +1145,13 @@ int hexchat_plugin_init(hexchat_plugin *plugin_handle, char **name, char **descr
 
 int hexchat_plugin_deinit(hexchat_plugin *plugin_handle)
 {
-	cleanup_scripts();
+	destroy_interpreter();
+	int i;
+	for(i = 0; i < num_scripts; i++)
+		destroy_script(scripts[i]);
+	num_scripts = 0;
+	ARRAY_RESIZE(scripts, num_scripts);
+	free(expand_buffer);
 	return 1;
 }
 
