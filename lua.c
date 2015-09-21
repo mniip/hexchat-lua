@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 
 #include <lua.h>
@@ -22,13 +23,22 @@ hexchat_plugin *ph;
 
 typedef struct
 {
+	hexchat_hook *hook;
+	lua_State *state;
+	int ref;
+}
+hook_info;
+
+typedef struct
+{
 	char *name;
 	char *description;
 	char *version;
 	void *handle;
 	char *filename;
 	lua_State *state;
-	hexchat_hook **hooks;
+	int traceback;
+	hook_info **hooks;
 	size_t num_hooks;
 }
 script_info;
@@ -151,6 +161,217 @@ static int api_hexchat_strip(lua_State *L)
 		hexchat_free(ph, result);
 		return 1;
 	}
+	return 0;
+}
+
+static void register_hook(hook_info *hook)
+{
+	script_info *info = get_info(hook->state);
+	ARRAY_GROW(info->hooks, info->num_hooks);
+	info->hooks[info->num_hooks - 1] = hook;
+}
+
+static void free_hook(hook_info *hook)
+{
+	lua_State *L = hook->state;
+	luaL_unref(L, LUA_REGISTRYINDEX, hook->ref);
+	hexchat_unhook(ph, hook->hook);
+	free(hook);
+}
+
+static int unregister_hook(hook_info *hook)
+{
+	script_info *info = get_info(hook->state);
+	int i;
+	for(i = 0; i < info->num_hooks; i++)
+		if(info->hooks[i] == hook)
+		{
+			free_hook(hook);
+			int j;
+			for(j = info->num_hooks - 1; j > i; j--)
+				info->hooks[j - 1] = info->hooks[j];
+			ARRAY_SHRINK(info->hooks, info->num_hooks);
+			return 1;
+		}
+	return 0;
+}
+
+static int api_command_closure(char *word[], char *word_eol[], void *udata)
+{
+	hook_info *info = udata;
+	lua_State *L = info->state;
+	lua_rawgeti(L, LUA_REGISTRYINDEX, get_info(L)->traceback);
+	int base = lua_gettop(L);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, info->ref);
+	int i;
+	lua_newtable(L);
+	for(i = 1; *word_eol[i]; i++)
+	{
+		lua_pushstring(L, word[i]);
+		lua_rawseti(L, -2, i);
+	}
+	lua_newtable(L);
+	for(i = 1; *word_eol[i]; i++)
+	{
+		lua_pushstring(L, word_eol[i]);
+		lua_rawseti(L, -2, i);
+	}
+	if(lua_pcall(L, 2, 1, base))
+	{
+		char const *error = lua_tostring(L, -1);
+		hexchat_printf(ph, "\00320Lua error in command hook: %s", error ? error : "(non-string error)");
+		return HEXCHAT_EAT_NONE;
+	}
+	return lua_tointeger(L, -1);
+}
+
+static int api_hexchat_hook_command(lua_State *L)
+{
+	char const *command = luaL_optstring(L, 1, "");
+	lua_pushvalue(L, 2);
+	int ref = luaL_ref(L, LUA_REGISTRYINDEX);
+	char const *help = luaL_optstring(L, 3, NULL);
+	int pri = luaL_optint(L, 4, HEXCHAT_PRI_NORM);
+	hook_info *info = malloc(sizeof(hook_info));
+	info->state = L;
+	info->ref = ref;
+	info->hook = hexchat_hook_command(ph, command, pri, api_command_closure, help, info);
+	hook_info **u = lua_newuserdata(L, sizeof(hook_info *));
+	*u = info;
+	luaL_newmetatable(L, "hook");
+	lua_setmetatable(L, -2);
+	register_hook(info);
+	return 1;
+}
+
+static int api_print_closure(char *word[], void *udata)
+{
+	hook_info *info = udata;
+	lua_State *L = info->state;
+	lua_rawgeti(L, LUA_REGISTRYINDEX, get_info(L)->traceback);
+	int base = lua_gettop(L);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, info->ref);
+	int i, j;
+	for(j = 31; j >= 1; j--)
+		if(*word[j])
+			break;
+	lua_newtable(L);
+	for(i = 1; i <= j; i++)
+	{
+		lua_pushstring(L, word[i]);
+		lua_rawseti(L, -2, i);
+	}
+	if(lua_pcall(L, 1, 1, base))
+	{
+		char const *error = lua_tostring(L, -1);
+		hexchat_printf(ph, "\00320Lua error in print hook: %s", error ? error : "(non-string error)");
+		return HEXCHAT_EAT_NONE;
+	}
+	return lua_tointeger(L, -1);
+}
+
+static int api_hexchat_hook_print(lua_State *L)
+{
+	char const *command = luaL_checkstring(L, 1);
+	lua_pushvalue(L, 2);
+	int ref = luaL_ref(L, LUA_REGISTRYINDEX);
+	int pri = luaL_optint(L, 3, HEXCHAT_PRI_NORM);
+	hook_info *info = malloc(sizeof(hook_info));
+	info->state = L;
+	info->ref = ref;
+	info->hook = hexchat_hook_print(ph, command, pri, api_print_closure, info);
+	hook_info **u = lua_newuserdata(L, sizeof(hook_info *));
+	*u = info;
+	luaL_newmetatable(L, "hook");
+	lua_setmetatable(L, -2);
+	register_hook(info);
+	return 1;
+}
+
+static int api_server_closure(char *word[], char *word_eol[], void *udata)
+{
+	hook_info *info = udata;
+	lua_State *L = info->state;
+	lua_rawgeti(L, LUA_REGISTRYINDEX, get_info(L)->traceback);
+	int base = lua_gettop(L);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, info->ref);
+	int i;
+	lua_newtable(L);
+	for(i = 1; *word_eol[i]; i++)
+	{
+		lua_pushstring(L, word[i]);
+		lua_rawseti(L, -2, i);
+	}
+	lua_newtable(L);
+	for(i = 1; *word_eol[i]; i++)
+	{
+		lua_pushstring(L, word_eol[i]);
+		lua_rawseti(L, -2, i);
+	}
+	if(lua_pcall(L, 2, 1, base))
+	{
+		char const *error = lua_tostring(L, -1);
+		hexchat_printf(ph, "\00320Lua error in server hook: %s", error ? error : "(non-string error)");
+		return HEXCHAT_EAT_NONE;
+	}
+	return lua_tointeger(L, -1);
+}
+
+static int api_hexchat_hook_server(lua_State *L)
+{
+	char const *command = luaL_optstring(L, 1, "RAW LINE");
+	lua_pushvalue(L, 2);
+	int ref = luaL_ref(L, LUA_REGISTRYINDEX);
+	int pri = luaL_optint(L, 3, HEXCHAT_PRI_NORM);
+	hook_info *info = malloc(sizeof(hook_info));
+	info->state = L;
+	info->ref = ref;
+	info->hook = hexchat_hook_server(ph, command, pri, api_server_closure, info);
+	hook_info **u = lua_newuserdata(L, sizeof(hook_info *));
+	*u = info;
+	luaL_newmetatable(L, "hook");
+	lua_setmetatable(L, -2);
+	register_hook(info);
+	return 1;
+}
+
+static int api_timer_closure(void *udata)
+{
+	hook_info *info = udata;
+	lua_State *L = info->state;
+	lua_rawgeti(L, LUA_REGISTRYINDEX, get_info(L)->traceback);
+	int base = lua_gettop(L);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, info->ref);
+	if(lua_pcall(L, 0, 1, base))
+	{
+		char const *error = lua_tostring(L, -1);
+		hexchat_printf(ph, "\00320Lua error in server hook: %s", error ? error : "(non-string error)");
+		return 0;
+	}
+	return lua_toboolean(L, -1);
+}
+
+static int api_hexchat_hook_timer(lua_State *L)
+{
+	int timeout = luaL_checknumber(L, 1);
+	lua_pushvalue(L, 2);
+	int ref = luaL_ref(L, LUA_REGISTRYINDEX);
+	hook_info *info = malloc(sizeof(hook_info));
+	info->state = L;
+	info->ref = ref;
+	info->hook = hexchat_hook_timer(ph, timeout, api_timer_closure, info);
+	hook_info **u = lua_newuserdata(L, sizeof(hook_info *));
+	*u = info;
+	luaL_newmetatable(L, "hook");
+	lua_setmetatable(L, -2);
+	register_hook(info);
+	return 1;
+}
+
+static int api_hexchat_unhook(lua_State *L)
+{
+	hook_info *info = *(hook_info **)luaL_checkudata(L, 1, "hook");
+	unregister_hook(info);
 	return 0;
 }
 
@@ -293,7 +514,12 @@ luaL_reg api_hexchat[] = {
 	{"emit_print", api_hexchat_emit_print},
 	{"send_modes", api_hexchat_send_modes},
 	{"nickcmp", api_hexchat_nickcmp},
-	{"strip", api_hexchat_strip}
+	{"strip", api_hexchat_strip},
+	{"hook_command", api_hexchat_hook_command},
+	{"hook_print", api_hexchat_hook_print},
+	{"hook_server", api_hexchat_hook_server},
+	{"hook_timer", api_hexchat_hook_timer},
+	{"unhook", api_hexchat_unhook}
 };
 
 luaL_reg api_hexchat_info_meta[] = {
@@ -345,6 +571,8 @@ int luaopen_hexchat(lua_State *L)
 	lua_setmetatable(L, -2);
 	lua_setfield(L, -2, "pluginprefs");
 
+	luaL_newmetatable(L, "hook");
+	lua_pop(L, 1);
 	return 1;
 }
 
@@ -432,12 +660,14 @@ static script_info *create_script(char const *file)
 	luaL_openlibs(L);
 	if(LUA_VERSION_NUM < 502)
 		patch_pairs(L);
+	lua_getglobal(L, "debug");
+	lua_getfield(L, -1, "traceback");
+	info->traceback = luaL_ref(L, LUA_REGISTRYINDEX);
 	lua_pushlightuserdata(L, info);
 	lua_setfield(L, LUA_REGISTRYINDEX, registry_field);
 	luaopen_hexchat(L);
 	lua_setglobal(L, "hexchat");
-	lua_getglobal(L, "debug");
-	lua_getfield(L, -1, "traceback");
+	lua_rawgeti(L, LUA_REGISTRYINDEX, info->traceback);
 	int base = lua_gettop(L);
 	if(luaL_loadfile(L, info->filename))
 	{
@@ -472,7 +702,7 @@ static void destroy_script(script_info *info)
 {
 	int i;
 	for(i = 0; i < info->num_hooks; i++)
-		hexchat_unhook(ph, info->hooks[i]);
+		free_hook(info->hooks[i]);
 	lua_State *L = info->state;
 	lua_close(L);
 	free(info->filename);
