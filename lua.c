@@ -18,6 +18,11 @@ char console_tab[] = ">>lua<<";
 
 hexchat_plugin *ph;
 
+#if LUA_VERSION_NUM < 502
+#define lua_rawlen lua_objlen
+#define luaL_setfuncs(L, r, n) luaL_register(L, NULL, r)
+#endif
+
 #define ARRAY_RESIZE(A, N) ((A) = realloc((A), (N) * sizeof(*(A))))
 #define ARRAY_GROW(A, N) ((N)++, ARRAY_RESIZE(A, N))
 #define ARRAY_SHRINK(A, N) ((N)--, ARRAY_RESIZE(A, N))
@@ -137,11 +142,11 @@ static int api_hexchat_emit_print_attrs(lua_State *L)
 static int api_hexchat_send_modes(lua_State *L)
 {
 	luaL_checktype(L, 1, LUA_TTABLE);
-	size_t n = lua_objlen(L, 1);
+	size_t n = lua_rawlen(L, 1);
 	char const *mode = luaL_checkstring(L, 2);
 	if(strlen(mode) != 2)
 		return luaL_argerror(L, 2, "expected sign followed by a mode letter");
-	int modes = luaL_optint(L, 3, 0);
+	int modes = luaL_optinteger(L, 3, 0);
 	const char *targets[n];
 	size_t i;
 	for(i = 0; i < n; i++)
@@ -248,7 +253,7 @@ static int api_hexchat_hook_command(lua_State *L)
 	lua_pushvalue(L, 2);
 	int ref = luaL_ref(L, LUA_REGISTRYINDEX);
 	char const *help = luaL_optstring(L, 3, NULL);
-	int pri = luaL_optint(L, 4, HEXCHAT_PRI_NORM);
+	int pri = luaL_optinteger(L, 4, HEXCHAT_PRI_NORM);
 	hook_info *info = malloc(sizeof(hook_info));
 	info->state = L;
 	info->ref = ref;
@@ -294,7 +299,7 @@ static int api_hexchat_hook_print(lua_State *L)
 	char const *command = luaL_checkstring(L, 1);
 	lua_pushvalue(L, 2);
 	int ref = luaL_ref(L, LUA_REGISTRYINDEX);
-	int pri = luaL_optint(L, 3, HEXCHAT_PRI_NORM);
+	int pri = luaL_optinteger(L, 3, HEXCHAT_PRI_NORM);
 	hook_info *info = malloc(sizeof(hook_info));
 	info->state = L;
 	info->ref = ref;
@@ -344,7 +349,7 @@ static int api_hexchat_hook_print_attrs(lua_State *L)
 	char const *command = luaL_checkstring(L, 1);
 	lua_pushvalue(L, 2);
 	int ref = luaL_ref(L, LUA_REGISTRYINDEX);
-	int pri = luaL_optint(L, 3, HEXCHAT_PRI_NORM);
+	int pri = luaL_optinteger(L, 3, HEXCHAT_PRI_NORM);
 	hook_info *info = malloc(sizeof(hook_info));
 	info->state = L;
 	info->ref = ref;
@@ -393,7 +398,7 @@ static int api_hexchat_hook_server(lua_State *L)
 	char const *command = luaL_optstring(L, 1, "RAW LINE");
 	lua_pushvalue(L, 2);
 	int ref = luaL_ref(L, LUA_REGISTRYINDEX);
-	int pri = luaL_optint(L, 3, HEXCHAT_PRI_NORM);
+	int pri = luaL_optinteger(L, 3, HEXCHAT_PRI_NORM);
 	hook_info *info = malloc(sizeof(hook_info));
 	info->state = L;
 	info->ref = ref;
@@ -446,7 +451,7 @@ static int api_hexchat_hook_server_attrs(lua_State *L)
 	char const *command = luaL_optstring(L, 1, "RAW LINE");
 	lua_pushvalue(L, 2);
 	int ref = luaL_ref(L, LUA_REGISTRYINDEX);
-	int pri = luaL_optint(L, 3, HEXCHAT_PRI_NORM);
+	int pri = luaL_optinteger(L, 3, HEXCHAT_PRI_NORM);
 	hook_info *info = malloc(sizeof(hook_info));
 	info->state = L;
 	info->ref = ref;
@@ -732,7 +737,7 @@ static int api_attrs_meta_gc(lua_State *L)
 	return 0;
 }
 
-luaL_reg api_hexchat[] = {
+luaL_Reg api_hexchat[] = {
 	{"register", api_hexchat_register},
 	{"command", api_hexchat_command},
 	{"print", api_hexchat_print},
@@ -756,25 +761,25 @@ luaL_reg api_hexchat[] = {
 	{NULL, NULL}
 };
 
-luaL_reg api_hexchat_prefs_meta[] = {
+luaL_Reg api_hexchat_prefs_meta[] = {
 	{"__index", api_hexchat_prefs_meta_index},
 	{"__newindex", api_hexchat_prefs_meta_newindex},
 	{NULL, NULL}
 };
 
-luaL_reg api_hexchat_pluginprefs_meta[] = {
+luaL_Reg api_hexchat_pluginprefs_meta[] = {
 	{"__index", api_hexchat_pluginprefs_meta_index},
 	{"__newindex", api_hexchat_pluginprefs_meta_newindex},
 	{"__pairs", api_hexchat_pluginprefs_meta_pairs},
 	{NULL, NULL}
 };
 
-luaL_reg api_hook_meta_index[] = {
+luaL_Reg api_hook_meta_index[] = {
 	{"unhook", api_hexchat_unhook},
 	{NULL, NULL}
 };
 
-luaL_reg api_attrs_meta[] = {
+luaL_Reg api_attrs_meta[] = {
 	{"__index", api_attrs_meta_index},
 	{"__newindex", api_attrs_meta_newindex},
 	{"__gc", api_attrs_meta_gc},
@@ -784,7 +789,7 @@ luaL_reg api_attrs_meta[] = {
 int luaopen_hexchat(lua_State *L)
 {
 	lua_newtable(L);
-	luaL_register(L, NULL, api_hexchat);
+	luaL_setfuncs(L, api_hexchat, 0);
 
 	lua_pushnumber(L, HEXCHAT_PRI_HIGHEST); lua_setfield(L, -2, "PRI_HIGHEST");
 	lua_pushnumber(L, HEXCHAT_PRI_HIGH); lua_setfield(L, -2, "PRI_HIGH");
@@ -798,19 +803,19 @@ int luaopen_hexchat(lua_State *L)
 
 	lua_newtable(L);
 	lua_newtable(L);
-	luaL_register(L, NULL, api_hexchat_prefs_meta);
+	luaL_setfuncs(L, api_hexchat_prefs_meta, 0);
 	lua_setmetatable(L, -2);
 	lua_setfield(L, -2, "prefs");
 
 	lua_newtable(L);
 	lua_newtable(L);
-	luaL_register(L, NULL, api_hexchat_pluginprefs_meta);
+	luaL_setfuncs(L, api_hexchat_pluginprefs_meta, 0);
 	lua_setmetatable(L, -2);
 	lua_setfield(L, -2, "pluginprefs");
 
 	luaL_newmetatable(L, "hook");
 	lua_newtable(L);
-	luaL_register(L, NULL, api_hook_meta_index);
+	luaL_setfuncs(L, api_hook_meta_index, 0);
 	lua_setfield(L, -2, "__index");
 	lua_pop(L, 1);
 
@@ -827,7 +832,7 @@ int luaopen_hexchat(lua_State *L)
 	lua_pop(L, 1);
 
 	luaL_newmetatable(L, "attrs");
-	luaL_register(L, NULL, api_attrs_meta);
+	luaL_setfuncs(L, api_attrs_meta, 0);
 	lua_pop(L, 1);
 
 	return 1;
