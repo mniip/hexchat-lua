@@ -14,6 +14,7 @@ char plugin_description[] = "Lua scripting interface";
 char plugin_version[256] = "0.0-";
 
 char registry_field[] = "plugin";
+char console_tab[] = ">>lua<<";
 
 hexchat_plugin *ph;
 
@@ -744,28 +745,33 @@ luaL_reg api_hexchat[] = {
 	{"get_context", api_hexchat_get_context},
 	{"find_context", api_hexchat_find_context},
 	{"set_context", api_hexchat_set_context},
-	{"attrs", api_hexchat_attrs}
+	{"attrs", api_hexchat_attrs},
+	{NULL, NULL}
 };
 
 luaL_reg api_hexchat_prefs_meta[] = {
 	{"__index", api_hexchat_prefs_meta_index},
-	{"__newindex", api_hexchat_prefs_meta_newindex}
+	{"__newindex", api_hexchat_prefs_meta_newindex},
+	{NULL, NULL}
 };
 
 luaL_reg api_hexchat_pluginprefs_meta[] = {
 	{"__index", api_hexchat_pluginprefs_meta_index},
 	{"__newindex", api_hexchat_pluginprefs_meta_newindex},
-	{"__pairs", api_hexchat_pluginprefs_meta_pairs}
+	{"__pairs", api_hexchat_pluginprefs_meta_pairs},
+	{NULL, NULL}
 };
 
 luaL_reg api_hook_meta_index[] = {
-	{"unhook", api_hexchat_unhook}
+	{"unhook", api_hexchat_unhook},
+	{NULL, NULL}
 };
 
 luaL_reg api_attrs_meta[] = {
 	{"__index", api_attrs_meta_index},
 	{"__newindex", api_attrs_meta_newindex},
-	{"__gc", api_attrs_meta_gc}
+	{"__gc", api_attrs_meta_gc},
+	{NULL, NULL}
 };
 
 int luaopen_hexchat(lua_State *L)
@@ -883,7 +889,7 @@ static int is_lua_file(char const *file)
 {
 	char const *ext1 = ".lua";
 	char const *ext2 = ".luac";
-	return !strcasecmp(file + strlen(file) - strlen(ext1), ext1) || !strcasecmp(file + strlen(file) - strlen(ext2), ext2);
+	return (strlen(file) >= strlen(ext1) && !strcasecmp(file + strlen(file) - strlen(ext1), ext1)) || (strlen(file) >= strlen(ext2) && !strcasecmp(file + strlen(file) - strlen(ext2), ext2));
 }
 
 void prepare_state(lua_State *L, script_info *info)
@@ -898,6 +904,10 @@ void prepare_state(lua_State *L, script_info *info)
 	lua_setfield(L, LUA_REGISTRYINDEX, registry_field);
 	luaopen_hexchat(L);
 	lua_setglobal(L, "hexchat");
+	lua_getglobal(L, "hexchat");
+	lua_getfield(L, -1, "print");
+	lua_setglobal(L, "print");
+	lua_pop(L, 1);
 }
 
 static script_info *create_script(char const *file)
@@ -1086,6 +1096,21 @@ static int command_reload(char *word[], char *word_eol[], void *userdata)
 		return HEXCHAT_EAT_NONE;
 }
 
+static int command_console_exec(char *word[], char *word_eol[], void *userdata)
+{
+	char const *channel = hexchat_get_info(ph, "channel");
+	if(channel && !strcasecmp(channel, console_tab))
+	{
+		if(interp)
+		{
+			hexchat_printf(ph, "> %s", word_eol[1]);
+			inject_string(interp, word_eol[1]);
+		}
+		return HEXCHAT_EAT_ALL;
+	}
+	return HEXCHAT_EAT_NONE;
+}
+
 static int command_lua(char *word[], char *word_eol[], void *userdata)
 {
 	if(!strcasecmp(word[2], "exec"))
@@ -1113,6 +1138,18 @@ static int command_lua(char *word[], char *word_eol[], void *userdata)
 		destroy_interpreter();
 		create_interpreter();
 	}
+	else if(!strcasecmp(word[2], "list"))
+	{
+		int i;
+		for(i = 0; i < num_scripts; i++)
+			hexchat_printf(ph, "%s %s: %s (%s)", scripts[i]->name, scripts[i]->version, scripts[i]->description, scripts[i]->filename);
+		if(interp)
+			hexchat_printf(ph, "%s %s", interp->name, plugin_version);
+	}
+	else if(!strcasecmp(word[2], "console"))
+	{
+		hexchat_commandf(ph, "query %s", console_tab);
+	}
 	else
 	{
 		hexchat_command(ph, "help lua");
@@ -1130,6 +1167,7 @@ int hexchat_plugin_init(hexchat_plugin *plugin_handle, char **name, char **descr
 
 	ph = plugin_handle;
 
+	hexchat_hook_command(ph, "", HEXCHAT_PRI_NORM, command_console_exec, NULL, NULL);
 	hexchat_hook_command(ph, "LOAD", HEXCHAT_PRI_NORM, command_load, NULL, NULL);
 	hexchat_hook_command(ph, "UNLOAD", HEXCHAT_PRI_NORM, command_unload, NULL, NULL);
 	hexchat_hook_command(ph, "RELOAD", HEXCHAT_PRI_NORM, command_reload, NULL, NULL);
