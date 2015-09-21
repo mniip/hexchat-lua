@@ -160,7 +160,7 @@ static int api_hexchat_strip(lua_State *L)
 	luaL_checktype(L, 1, LUA_TSTRING);
 	char const *text = lua_tolstring(L, 1, &len);
 	int leave_colors = lua_toboolean(L, 2);
-	int leave_attrs = lua_toboolean(L, 2);
+	int leave_attrs = lua_toboolean(L, 3);
 	char *result = hexchat_strip(ph, text, len, (leave_colors ? 0 : 1) | (leave_attrs ? 0 : 2));
 	if(result)
 	{
@@ -561,7 +561,8 @@ static int api_hexchat_get_info(lua_State *L)
 			lua_pushstring(L, data);
 		return 1;
 	}
-	return 0;
+	lua_pushnil(L);
+	return 1;
 }
 
 static int api_hexchat_attrs(lua_State *L)
