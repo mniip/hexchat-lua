@@ -6,6 +6,8 @@
 #include <lauxlib.h>
 #include <lualib.h>
 
+#include <glib.h>
+
 #include <hexchat-plugin.h>
 
 
@@ -1025,6 +1027,21 @@ static int unload_script(char const *filename)
 
 static void autoload_scripts()
 {
+	char const *configdir = hexchat_get_info(ph, "configdir");
+	char const *addons = "addons";
+	char *path = malloc(strlen(configdir) + 1 + strlen(addons) + 1);
+	strcpy(path, configdir);
+	strcat(path, "/");
+	strcat(path, addons);
+	GDir *dir = g_dir_open(path, 0, NULL);
+	if(dir)
+	{
+		char const *filename;
+		while((filename = g_dir_read_name(dir)))
+			load_script(filename);
+		g_dir_close(dir);
+	}
+	free(path);
 }
 
 script_info *interp = NULL;

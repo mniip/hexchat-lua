@@ -8,9 +8,11 @@ CFLAGS += -Wno-unused-parameter
 
 CFLAGS += $(shell $(PKG_CONFIG) --cflags hexchat-plugin)
 CFLAGS += $(shell $(PKG_CONFIG) --cflags lua)
+CFLAGS += $(shell $(PKG_CONFIG) --cflags glib-2.0)
 
 LDFLAGS ?= -shared
-LIBS ?= $(shell $(PKG_CONFIG) --libs lua)
+LIBS += $(shell $(PKG_CONFIG) --libs lua)
+LIBS += $(shell $(PKG_CONFIG) --libs glib-2.0)
 
 OUTPUT = lua.so
 
