@@ -875,23 +875,16 @@ static char const *expand_path(char const *path)
 	{
 		if(path[0] == '~')
 		{
-			char const *home = getenv("HOME");
-			expand_buffer = realloc(expand_buffer, strlen(home) + 1 + strlen(path + 1) + 1);
-			strcpy(expand_buffer, home);
-			strcat(expand_buffer, "/");
-			strcat(expand_buffer, path + 1);
+			if(expand_buffer)
+				g_free(expand_buffer);
+			expand_buffer = g_build_filename(getenv("HOME"), path + 1, NULL);
 			return expand_buffer;
 		}
 		else
 		{
-			char const *configdir = hexchat_get_info(ph, "configdir");
-			char const *addons = "addons";
-			expand_buffer = realloc(expand_buffer, strlen(configdir) + 1 + strlen(addons) + 1 + strlen(path) + 1);
-			strcpy(expand_buffer, configdir);
-			strcat(expand_buffer, "/");
-			strcat(expand_buffer, addons);
-			strcat(expand_buffer, "/");
-			strcat(expand_buffer, path);
+			if(expand_buffer)
+				g_free(expand_buffer);
+			expand_buffer = g_build_filename(hexchat_get_info(ph, "configdir"), "addons", path, NULL);
 			return expand_buffer;
 		}
 	}
@@ -1027,12 +1020,7 @@ static int unload_script(char const *filename)
 
 static void autoload_scripts()
 {
-	char const *configdir = hexchat_get_info(ph, "configdir");
-	char const *addons = "addons";
-	char *path = malloc(strlen(configdir) + 1 + strlen(addons) + 1);
-	strcpy(path, configdir);
-	strcat(path, "/");
-	strcat(path, addons);
+	char *path = g_build_filename(hexchat_get_info(ph, "configdir"), "addons", NULL);
 	GDir *dir = g_dir_open(path, 0, NULL);
 	if(dir)
 	{
@@ -1041,7 +1029,7 @@ static void autoload_scripts()
 			load_script(filename);
 		g_dir_close(dir);
 	}
-	free(path);
+	g_free(path);
 }
 
 script_info *interp = NULL;
@@ -1219,7 +1207,8 @@ int hexchat_plugin_deinit(hexchat_plugin *plugin_handle)
 		destroy_script(scripts[i]);
 	num_scripts = 0;
 	ARRAY_RESIZE(scripts, num_scripts);
-	free(expand_buffer);
+	if(expand_buffer)
+		g_free(expand_buffer);
 	return 1;
 }
 
