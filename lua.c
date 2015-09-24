@@ -55,6 +55,8 @@ typedef struct
 	int traceback;
 	hook_info **hooks;
 	size_t num_hooks;
+	hook_info **unload_hooks;
+	size_t num_unload_hooks;
 }
 script_info;
 
@@ -197,7 +199,8 @@ static void free_hook(hook_info *hook)
 {
 	lua_State *L = hook->state;
 	luaL_unref(L, LUA_REGISTRYINDEX, hook->ref);
-	hexchat_unhook(ph, hook->hook);
+	if(hook->hook)
+		hexchat_unhook(ph, hook->hook);
 	free(hook);
 }
 
@@ -213,6 +216,16 @@ static int unregister_hook(hook_info *hook)
 			for(j = info->num_hooks - 1; j > i; j--)
 				info->hooks[j - 1] = info->hooks[j];
 			ARRAY_SHRINK(info->hooks, info->num_hooks);
+			return 1;
+		}
+	for(i = 0; i < info->num_unload_hooks; i++)
+		if(info->unload_hooks[i] == hook)
+		{
+			free_hook(hook);
+			size_t j;
+			for(j = info->num_unload_hooks - 1; j > i; j--)
+				info->unload_hooks[j - 1] = info->unload_hooks[j];
+			ARRAY_SHRINK(info->unload_hooks, info->num_unload_hooks);
 			return 1;
 		}
 	return 0;
@@ -501,6 +514,24 @@ static int api_hexchat_hook_timer(lua_State *L)
 	return 1;
 }
 
+static int api_hexchat_hook_unload(lua_State *L)
+{
+	lua_pushvalue(L, 1);
+	int ref = luaL_ref(L, LUA_REGISTRYINDEX);
+	hook_info *info = malloc(sizeof(hook_info));
+	info->state = L;
+	info->ref = ref;
+	info->hook = NULL;
+	hook_info **u = lua_newuserdata(L, sizeof(hook_info *));
+	*u = info;
+	luaL_newmetatable(L, "hook");
+	lua_setmetatable(L, -2);
+	script_info *script = get_info(info->state);
+	ARRAY_GROW(script->unload_hooks, script->num_unload_hooks);
+	script->unload_hooks[script->num_unload_hooks - 1] = info;
+	return 1;
+}
+
 static int api_hexchat_unhook(lua_State *L)
 {
 	hook_info *info = *(hook_info **)luaL_checkudata(L, 1, "hook");
@@ -545,7 +576,7 @@ static int api_hexchat_set_context(lua_State *L)
 	return 0;
 }
 
-int wrap_context_closure(lua_State *L)
+static int wrap_context_closure(lua_State *L)
 {
 	hexchat_context *context = *(hexchat_context **)luaL_checkudata(L, 1, "context");
 	lua_pushvalue(L, lua_upvalueindex(1));
@@ -557,7 +588,7 @@ int wrap_context_closure(lua_State *L)
 	return lua_gettop(L);
 }
 
-inline void wrap_context(lua_State *L, char const *field, lua_CFunction func)
+static inline void wrap_context(lua_State *L, char const *field, lua_CFunction func)
 {
 	lua_pushcfunction(L, func);
 	lua_pushcclosure(L, wrap_context_closure, 1);
@@ -755,6 +786,7 @@ luaL_Reg api_hexchat[] = {
 	{"hook_server", api_hexchat_hook_server},
 	{"hook_server_attrs", api_hexchat_hook_server_attrs},
 	{"hook_timer", api_hexchat_hook_timer},
+	{"hook_unload", api_hexchat_hook_unload},
 	{"unhook", api_hexchat_unhook},
 	{"get_context", api_hexchat_get_context},
 	{"find_context", api_hexchat_find_context},
@@ -840,7 +872,7 @@ int luaopen_hexchat(lua_State *L)
 	return 1;
 }
 
-int pairs_closure(lua_State *L)
+static int pairs_closure(lua_State *L)
 {
 	lua_settop(L, 1);
 	if(luaL_getmetafield(L, 1, "__pairs"))
@@ -858,7 +890,7 @@ int pairs_closure(lua_State *L)
 	}
 }
 
-void patch_pairs(lua_State *L)
+static void patch_pairs(lua_State *L)
 {
 	lua_getglobal(L, "pairs");
 	lua_pushcclosure(L, pairs_closure, 1);
@@ -899,7 +931,7 @@ static int is_lua_file(char const *file)
 	return (strlen(file) >= strlen(ext1) && !strcmp(file + strlen(file) - strlen(ext1), ext1)) || (strlen(file) >= strlen(ext2) && !strcmp(file + strlen(file) - strlen(ext2), ext2));
 }
 
-void prepare_state(lua_State *L, script_info *info)
+static void prepare_state(lua_State *L, script_info *info)
 {
 	luaL_openlibs(L);
 	if(LUA_VERSION_NUM < 502)
@@ -923,6 +955,8 @@ static script_info *create_script(char const *file)
 	info->name = info->description = info->version = NULL;
 	info->hooks = NULL;
 	info->num_hooks = 0;
+	info->unload_hooks = NULL;
+	info->num_unload_hooks = 0;
 	info->filename = copy_string(expand_path(file));
 	lua_State *L = luaL_newstate();
 	info->state = L;
@@ -950,6 +984,8 @@ static script_info *create_script(char const *file)
 		size_t i;
 		for(i = 0; i < info->num_hooks; i++)
 			free_hook(info->hooks[i]);
+		for(i = 0; i < info->num_unload_hooks; i++)
+			free_hook(info->unload_hooks[i]);
 		lua_close(L);
 		free(info->filename);
 		free(info);
@@ -962,6 +998,8 @@ static script_info *create_script(char const *file)
 		size_t i;
 		for(i = 0; i < info->num_hooks; i++)
 			free_hook(info->hooks[i]);
+		for(i = 0; i < info->num_unload_hooks; i++)
+			free_hook(info->unload_hooks[i]);
 		lua_close(L);
 		free(info->filename);
 		free(info);
@@ -977,6 +1015,20 @@ static void destroy_script(script_info *info)
 	for(i = 0; i < info->num_hooks; i++)
 		free_hook(info->hooks[i]);
 	lua_State *L = info->state;
+	lua_rawgeti(L, LUA_REGISTRYINDEX, info->traceback);
+	int base = lua_gettop(L);
+	for(i = 0; i < info->num_unload_hooks; i++)
+	{
+		hook_info *hook = info->unload_hooks[i];
+		lua_rawgeti(L, LUA_REGISTRYINDEX, hook->ref);
+		if(lua_pcall(L, 0, 0, base))
+		{
+			char const *error = lua_tostring(L, -1);
+			hexchat_printf(ph, "Lua error in unload hook: %s", error ? error : "(non-string error)");
+			lua_pop(L, 1);
+		}
+		free_hook(hook);
+	}
 	lua_close(L);
 	free(info->filename);
 	free(info->name);
@@ -1060,6 +1112,8 @@ static void destroy_interpreter()
 		size_t i;
 		for(i = 0; i < interp->num_hooks; i++)
 			free_hook(interp->hooks[i]);
+		for(i = 0; i < interp->num_unload_hooks; i++)
+			free_hook(interp->unload_hooks[i]);
 		lua_State *L = interp->state;
 		lua_close(L);
 		free(interp);
