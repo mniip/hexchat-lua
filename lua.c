@@ -1158,19 +1158,23 @@ static void inject_string(script_info *info, char const *line)
 		return;
 	}
 	int top = lua_gettop(L);
-	luaL_Buffer b;
-	luaL_buffinit(L, &b);
-	int i;
-	for(i = base + 1; i <= top; i++)
+	if(top > base)
 	{
-		if(i != base + 1)
-			luaL_addstring(&b, " ");
-		tostring(L, i);
-		luaL_addvalue(&b);
+		luaL_Buffer b;
+		luaL_buffinit(L, &b);
+		int i;
+		for(i = base + 1; i <= top; i++)
+		{
+			if(i != base + 1)
+				luaL_addstring(&b, " ");
+			tostring(L, i);
+			luaL_addvalue(&b);
+		}
+		luaL_pushresult(&b);
+		hexchat_print(ph, lua_tostring(L, -1));
+		lua_pop(L, top - base + 1);
 	}
-	luaL_pushresult(&b);
-	hexchat_print(ph, lua_tostring(L, -1));
-	lua_pop(L, top - base + 2);
+	lua_pop(L, 1);
 }
 
 static int command_load(char *word[], char *word_eol[], void *userdata)
