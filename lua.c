@@ -1045,19 +1045,14 @@ static void destroy_script(script_info *info)
 	free(info);
 }
 
-static int load_script(char const *file)
+static void load_script(char const *file)
 {
-	if(is_lua_file(file))
+	script_info *info = create_script(file);
+	if(info)
 	{
-		script_info *info = create_script(file);
-		if(info)
-		{
-			ARRAY_GROW(scripts, num_scripts);
-			scripts[num_scripts - 1] = info;
-		}
-		return 1;
+		ARRAY_GROW(scripts, num_scripts);
+		scripts[num_scripts - 1] = info;
 	}
-	return 0;
 }
 
 static int unload_script(char const *filename)
@@ -1085,7 +1080,8 @@ static void autoload_scripts()
 	{
 		char const *filename;
 		while((filename = g_dir_read_name(dir)))
-			load_script(filename);
+			if(is_lua_file(filename))
+				load_script(filename);
 		g_dir_close(dir);
 	}
 	g_free(path);
@@ -1179,8 +1175,11 @@ static void inject_string(script_info *info, char const *line)
 
 static int command_load(char *word[], char *word_eol[], void *userdata)
 {
-	if(load_script(word[2]))
+	if(is_lua_file(word[2]))
+	{
+		load_script(word[2]);
 		return HEXCHAT_EAT_ALL;
+	}
 	else
 		return HEXCHAT_EAT_NONE;
 }
@@ -1221,7 +1220,20 @@ static int command_console_exec(char *word[], char *word_eol[], void *userdata)
 
 static int command_lua(char *word[], char *word_eol[], void *userdata)
 {
-	if(!strcmp(word[2], "exec"))
+	if(!strcmp(word[2], "load"))
+	{
+		load_script(word[3]);
+	}
+	else if(!strcmp(word[2], "unload"))
+	{
+		unload_script(word[3]);
+	}
+	else if(!strcmp(word[2], "reload"))
+	{
+		if(unload_script(word[3]))
+			load_script(word[3]);
+	}
+	else if(!strcmp(word[2], "exec"))
 	{
 		if(interp)
 			inject_string(interp, word_eol[3]);
