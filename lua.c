@@ -1154,14 +1154,27 @@ static void inject_string(script_info *info, char const *line)
 		lua_pop(L, 2);
 		return;
 	}
-	if(lua_pcall(L, 0, 0, base))
+	if(lua_pcall(L, 0, LUA_MULTRET, base))
 	{
 		char const *error = lua_tostring(L, -1);
 		lua_pop(L, 2);
 		hexchat_printf(ph, "Lua error: %s", error ? error : "(non-string error)");
 		return;
 	}
-	lua_pop(L, 1);
+	int top = lua_gettop(L);
+	luaL_Buffer b;
+	luaL_buffinit(L, &b);
+	int i;
+	for(i = base + 1; i <= top; i++)
+	{
+		if(i != base + 1)
+			luaL_addstring(&b, " ");
+		tostring(L, i);
+		luaL_addvalue(&b);
+	}
+	luaL_pushresult(&b);
+	hexchat_print(ph, lua_tostring(L, -1));
+	lua_pop(L, top - base + 2);
 }
 
 static int command_load(char *word[], char *word_eol[], void *userdata)
