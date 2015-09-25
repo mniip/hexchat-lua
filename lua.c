@@ -540,9 +540,18 @@ static int api_hexchat_hook_unload(lua_State *L)
 
 static int api_hexchat_unhook(lua_State *L)
 {
-	hook_info *info = *(hook_info **)luaL_checkudata(L, 1, "hook");
-	unregister_hook(info);
-	return 0;
+	hook_info **info = (hook_info **)luaL_checkudata(L, 1, "hook");
+	if(*info)
+	{
+		unregister_hook(*info);
+		*info = 0;
+		return 0;
+	}
+	else
+	{
+		tostring(L, 1);
+		return luaL_error(L, "hook %s is already unhooked", lua_tostring(L, -1));
+	}
 }
 
 static int api_hexchat_find_context(lua_State *L)
