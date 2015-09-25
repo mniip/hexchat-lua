@@ -254,11 +254,12 @@ static int api_command_closure(char *word[], char *word_eol[], void *udata)
 	if(lua_pcall(L, 2, 1, base))
 	{
 		char const *error = lua_tostring(L, -1);
+		lua_pop(L, 2);
 		hexchat_printf(ph, "Lua error in command hook: %s", error ? error : "(non-string error)");
 		return HEXCHAT_EAT_NONE;
 	}
 	int ret = lua_tointeger(L, -1);
-	lua_pop(L, 1);
+	lua_pop(L, 2);
 	return ret;
 }
 
@@ -301,11 +302,12 @@ static int api_print_closure(char *word[], void *udata)
 	if(lua_pcall(L, 1, 1, base))
 	{
 		char const *error = lua_tostring(L, -1);
+		lua_pop(L, 2);
 		hexchat_printf(ph, "Lua error in print hook: %s", error ? error : "(non-string error)");
 		return HEXCHAT_EAT_NONE;
 	}
 	int ret = lua_tointeger(L, -1);
-	lua_pop(L, 1);
+	lua_pop(L, 2);
 	return ret;
 }
 
@@ -351,11 +353,12 @@ static int api_print_attrs_closure(char *word[], hexchat_event_attrs *attrs, voi
 	if(lua_pcall(L, 2, 1, base))
 	{
 		char const *error = lua_tostring(L, -1);
+		lua_pop(L, 2);
 		hexchat_printf(ph, "Lua error in print_attrs hook: %s", error ? error : "(non-string error)");
 		return HEXCHAT_EAT_NONE;
 	}
 	int ret = lua_tointeger(L, -1);
-	lua_pop(L, 1);
+	lua_pop(L, 2);
 	return ret;
 }
 
@@ -400,11 +403,12 @@ static int api_server_closure(char *word[], char *word_eol[], void *udata)
 	if(lua_pcall(L, 2, 1, base))
 	{
 		char const *error = lua_tostring(L, -1);
+		lua_pop(L, 2);
 		hexchat_printf(ph, "Lua error in server hook: %s", error ? error : "(non-string error)");
 		return HEXCHAT_EAT_NONE;
 	}
 	int ret = lua_tointeger(L, -1);
-	lua_pop(L, 1);
+	lua_pop(L, 2);
 	return ret;
 }
 
@@ -453,11 +457,12 @@ static int api_server_attrs_closure(char *word[], char *word_eol[], hexchat_even
 	if(lua_pcall(L, 3, 1, base))
 	{
 		char const *error = lua_tostring(L, -1);
+		lua_pop(L, 2);
 		hexchat_printf(ph, "Lua error in server_attrs hook: %s", error ? error : "(non-string error)");
 		return HEXCHAT_EAT_NONE;
 	}
 	int ret = lua_tointeger(L, -1);
-	lua_pop(L, 1);
+	lua_pop(L, 2);
 	return ret;
 }
 
@@ -489,11 +494,12 @@ static int api_timer_closure(void *udata)
 	if(lua_pcall(L, 0, 1, base))
 	{
 		char const *error = lua_tostring(L, -1);
+		lua_pop(L, 2);
 		hexchat_printf(ph, "Lua error in timer hook: %s", error ? error : "(non-string error)");
 		return 0;
 	}
 	int ret = lua_toboolean(L, -1);
-	lua_pop(L, 1);
+	lua_pop(L, 2);
 	return ret;
 }
 
@@ -939,6 +945,7 @@ static void prepare_state(lua_State *L, script_info *info)
 	lua_getglobal(L, "debug");
 	lua_getfield(L, -1, "traceback");
 	info->traceback = luaL_ref(L, LUA_REGISTRYINDEX);
+	lua_pop(L, 1);
 	lua_pushlightuserdata(L, info);
 	lua_setfield(L, LUA_REGISTRYINDEX, registry_field);
 	luaopen_hexchat(L);
@@ -1024,8 +1031,8 @@ static void destroy_script(script_info *info)
 		if(lua_pcall(L, 0, 0, base))
 		{
 			char const *error = lua_tostring(L, -1);
+			lua_pop(L, 2);
 			hexchat_printf(ph, "Lua error in unload hook: %s", error ? error : "(non-string error)");
-			lua_pop(L, 1);
 		}
 		free_hook(hook);
 	}
@@ -1091,8 +1098,11 @@ static void create_interpreter()
 	interp->name = "lua interpreter";
 	interp->description = "";
 	interp->version = "";
+	interp->handle = NULL;
 	interp->hooks = NULL;
 	interp->num_hooks = 0;
+	interp->unload_hooks = NULL;
+	interp->num_unload_hooks = 0;
 	interp->filename = "";
 	lua_State *L = luaL_newstate();
 	interp->state = L;
@@ -1112,9 +1122,21 @@ static void destroy_interpreter()
 		size_t i;
 		for(i = 0; i < interp->num_hooks; i++)
 			free_hook(interp->hooks[i]);
-		for(i = 0; i < interp->num_unload_hooks; i++)
-			free_hook(interp->unload_hooks[i]);
 		lua_State *L = interp->state;
+		lua_rawgeti(L, LUA_REGISTRYINDEX, interp->traceback);
+		int base = lua_gettop(L);
+		for(i = 0; i < interp->num_unload_hooks; i++)
+		{
+			hook_info *hook = interp->unload_hooks[i];
+			lua_rawgeti(L, LUA_REGISTRYINDEX, hook->ref);
+			if(lua_pcall(L, 0, 0, base))
+			{
+				char const *error = lua_tostring(L, -1);
+				lua_pop(L, 2);
+				hexchat_printf(ph, "Lua error in unload hook: %s", error ? error : "(non-string error)");
+			}
+			free_hook(hook);
+		}
 		lua_close(L);
 		free(interp);
 		interp = NULL;
@@ -1129,11 +1151,13 @@ static void inject_string(script_info *info, char const *line)
 	if(luaL_loadbuffer(L, line, strlen(line), "@interpreter"))
 	{
 		hexchat_printf(ph, "Lua syntax error: %s", luaL_optstring(L, -1, ""));
+		lua_pop(L, 2);
 		return;
 	}
 	if(lua_pcall(L, 0, 0, base))
 	{
 		char const *error = lua_tostring(L, -1);
+		lua_pop(L, 2);
 		hexchat_printf(ph, "Lua error: %s", error ? error : "(non-string error)");
 		return;
 	}
