@@ -870,7 +870,8 @@ int luaopen_hexchat(lua_State *L)
 
 	luaL_newmetatable(L, "context");
 	lua_newtable(L);
-	wrap_context(L, "set", api_hexchat_set_context);
+	lua_pushcfunction(L, api_hexchat_set_context);
+	lua_setfield(L, -2, "set");
 	wrap_context(L, "find_context", api_hexchat_find_context);
 	wrap_context(L, "print", api_hexchat_print);
 	wrap_context(L, "emit_print", api_hexchat_emit_print);
