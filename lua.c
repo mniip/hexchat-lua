@@ -764,15 +764,12 @@ static int api_hexchat_pluginprefs_meta_pairs_closure(lua_State *L)
 		return 2;
 	}
 	else
-	{
-		free(lua_touserdata(L, lua_upvalueindex(2)));
 		return 0;
-	}
 }
 
 static int api_hexchat_pluginprefs_meta_pairs(lua_State *L)
 {
-	char *dest = malloc(4096);
+	char *dest = lua_newuserdata(L, 4096);
 	hexchat_plugin *h = get_info(L)->handle;
 	if(!hexchat_pluginpref_list(h, dest))
 		strcpy(dest, "");
@@ -956,6 +953,7 @@ int luaopen_hexchat(lua_State *L)
 	wrap_context(L, "emit_print", api_hexchat_emit_print);
 	wrap_context(L, "emit_print_attrs", api_hexchat_emit_print_attrs);
 	wrap_context(L, "command", api_hexchat_command);
+	wrap_context(L, "nickcmp", api_hexchat_nickcmp);
 	wrap_context(L, "get_info", api_hexchat_get_info);
 	lua_setfield(L, -2, "__index");
 	lua_pop(L, 1);
