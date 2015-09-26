@@ -1357,7 +1357,7 @@ static int command_lua(char *word[], char *word_eol[], void *userdata)
 		if(!found)
 			hexchat_printf(ph, "Could not find a script by the name '%s'", word[3]);
 	}
-	else if(!strcmp(word[2], "reload"))
+	else if(!strcmp(word[2], "reset"))
 	{
 		destroy_interpreter();
 		create_interpreter();

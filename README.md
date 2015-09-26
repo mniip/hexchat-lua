@@ -28,7 +28,7 @@ Opens an interactive console. Messages to that tab are intercepted and interpret
 ### `/lua inject <filename> <code>`
 Executes given code in the context of a given script (which has to be loaded).
 
-### `/lua reload`
+### `/lua reset`
 Reloads the interpreter (but not the scripts).
 
 ## API
