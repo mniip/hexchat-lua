@@ -49,7 +49,7 @@ typedef struct
 	char *name;
 	char *description;
 	char *version;
-	void *handle;
+	hexchat_plugin *handle;
 	char *filename;
 	lua_State *state;
 	int traceback;
@@ -313,14 +313,14 @@ static int api_print_closure(char *word[], void *udata)
 
 static int api_hexchat_hook_print(lua_State *L)
 {
-	char const *command = luaL_checkstring(L, 1);
+	char const *event = luaL_checkstring(L, 1);
 	lua_pushvalue(L, 2);
 	int ref = luaL_ref(L, LUA_REGISTRYINDEX);
 	int pri = luaL_optinteger(L, 3, HEXCHAT_PRI_NORM);
 	hook_info *info = malloc(sizeof(hook_info));
 	info->state = L;
 	info->ref = ref;
-	info->hook = hexchat_hook_print(ph, command, pri, api_print_closure, info);
+	info->hook = hexchat_hook_print(ph, event, pri, api_print_closure, info);
 	hook_info **u = lua_newuserdata(L, sizeof(hook_info *));
 	*u = info;
 	luaL_newmetatable(L, "hook");
@@ -364,14 +364,14 @@ static int api_print_attrs_closure(char *word[], hexchat_event_attrs *attrs, voi
 
 static int api_hexchat_hook_print_attrs(lua_State *L)
 {
-	char const *command = luaL_checkstring(L, 1);
+	char const *event = luaL_checkstring(L, 1);
 	lua_pushvalue(L, 2);
 	int ref = luaL_ref(L, LUA_REGISTRYINDEX);
 	int pri = luaL_optinteger(L, 3, HEXCHAT_PRI_NORM);
 	hook_info *info = malloc(sizeof(hook_info));
 	info->state = L;
 	info->ref = ref;
-	info->hook = hexchat_hook_print_attrs(ph, command, pri, api_print_attrs_closure, info);
+	info->hook = hexchat_hook_print_attrs(ph, event, pri, api_print_attrs_closure, info);
 	hook_info **u = lua_newuserdata(L, sizeof(hook_info *));
 	*u = info;
 	luaL_newmetatable(L, "hook");
@@ -670,12 +670,13 @@ static int api_hexchat_pluginprefs_meta_index(lua_State *L)
 {
 	char const *key = luaL_checkstring(L, 2);
 	char str[512];
-	if(hexchat_pluginpref_get_str(ph, key, str))
+	hexchat_plugin *h = get_info(L)->handle;
+	if(hexchat_pluginpref_get_str(h, key, str))
 	{
 		lua_pushstring(L, str);
 		return 1;
 	}
-	int r = hexchat_pluginpref_get_int(ph, key);
+	int r = hexchat_pluginpref_get_int(h, key);
 	if(r != -1)
 	{
 		lua_pushnumber(L, r);
@@ -688,16 +689,17 @@ static int api_hexchat_pluginprefs_meta_index(lua_State *L)
 static int api_hexchat_pluginprefs_meta_newindex(lua_State *L)
 {
 	char const *key = luaL_checkstring(L, 2);
+	hexchat_plugin *h = get_info(L)->handle;
 	switch(lua_type(L, 3))
 	{
 		case LUA_TSTRING:
-			hexchat_pluginpref_set_str(ph, key, lua_tostring(L, 3));
+			hexchat_pluginpref_set_str(h, key, lua_tostring(L, 3));
 			return 0;
 		case LUA_TNUMBER:
-			hexchat_pluginpref_set_int(ph, key, lua_tointeger(L, 3));
+			hexchat_pluginpref_set_int(h, key, lua_tointeger(L, 3));
 			return 0;
 		case LUA_TNIL: case LUA_TNONE:
-			hexchat_pluginpref_delete(ph, key);
+			hexchat_pluginpref_delete(h, key);
 			return 0;
 		default:
 			return luaL_argerror(L, 3, "expected string, number, or nil");
@@ -707,6 +709,7 @@ static int api_hexchat_pluginprefs_meta_newindex(lua_State *L)
 static int api_hexchat_pluginprefs_meta_pairs_closure(lua_State *L)
 {
 	char *dest = lua_touserdata(L, lua_upvalueindex(1));
+	hexchat_plugin *h = get_info(L)->handle;
 	if(dest && *dest)
 	{
 		char *key = dest;
@@ -717,12 +720,12 @@ static int api_hexchat_pluginprefs_meta_pairs_closure(lua_State *L)
 		lua_replace(L, lua_upvalueindex(1));
 		lua_pushstring(L, key);
 		char str[512];
-		if(hexchat_pluginpref_get_str(ph, key, str))
+		if(hexchat_pluginpref_get_str(h, key, str))
 		{
 			lua_pushstring(L, str);
 			return 2;
 		}
-		int r = hexchat_pluginpref_get_int(ph, key);
+		int r = hexchat_pluginpref_get_int(h, key);
 		if(r != -1)
 		{
 			lua_pushnumber(L, r);
@@ -741,7 +744,8 @@ static int api_hexchat_pluginprefs_meta_pairs_closure(lua_State *L)
 static int api_hexchat_pluginprefs_meta_pairs(lua_State *L)
 {
 	char *dest = malloc(4096);
-	if(!hexchat_pluginpref_list(ph, dest))
+	hexchat_plugin *h = get_info(L)->handle;
+	if(!hexchat_pluginpref_list(h, dest))
 		strcpy(dest, "");
 	lua_pushlightuserdata(L, dest);
 	lua_pushlightuserdata(L, dest);
@@ -1104,7 +1108,7 @@ static void create_interpreter()
 	interp->name = "lua interpreter";
 	interp->description = "";
 	interp->version = "";
-	interp->handle = NULL;
+	interp->handle = ph;
 	interp->hooks = NULL;
 	interp->num_hooks = 0;
 	interp->unload_hooks = NULL;
