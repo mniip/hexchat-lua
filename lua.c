@@ -636,6 +636,35 @@ static int api_hexchat_attrs(lua_State *L)
 	return 1;
 }
 
+static int api_iterate_closure(lua_State *L)
+{
+	hexchat_list *list = *(hexchat_list **)luaL_checkudata(L, lua_upvalueindex(1), "list");
+	if(hexchat_list_next(ph, list))
+	{
+		lua_pushvalue(L, lua_upvalueindex(1));
+		return 1;
+	}
+	else
+		return 0;
+}
+
+static int api_hexchat_iterate(lua_State *L)
+{
+	char const *name = luaL_checkstring(L, 1);
+	hexchat_list *list = hexchat_list_get(ph, name);
+	if(list)
+	{
+		hexchat_list **u = lua_newuserdata(L, sizeof(hexchat_list *));
+		*u = list;
+		luaL_newmetatable(L, "list");
+		lua_setmetatable(L, -2);
+		lua_pushcclosure(L, api_iterate_closure, 1);
+		return 1;
+	}
+	else
+		return luaL_argerror(L, 1, "invalid list name");
+}
+
 static int api_hexchat_prefs_meta_index(lua_State *L)
 {
 	char const *key = luaL_checkstring(L, 2);
@@ -789,6 +818,44 @@ static int api_attrs_meta_gc(lua_State *L)
 	return 0;
 }
 
+static int api_list_meta_index(lua_State *L)
+{
+	hexchat_list *list = *(hexchat_list **)luaL_checkudata(L, 1, "list");
+	char const *key = luaL_checkstring(L, 2);
+	char const *str = hexchat_list_str(ph, list, key);
+	if(str)
+	{
+		lua_pushstring(L, str);
+		return 1;
+	}
+	time_t tm = hexchat_list_time(ph, list, key);
+	if(tm != -1)
+	{
+		lua_pushinteger(L, tm);
+		return 1;
+	}
+	int number = hexchat_list_int(ph, list, key);
+	if(number != -1)
+	{
+		lua_pushnumber(L, number);
+		return 1;
+	}
+	lua_pushnil(L);
+	return 1;
+}
+
+static int api_list_meta_newindex(lua_State *L)
+{
+	return luaL_error(L, "hexchat.iterate list is read-only");
+}
+
+static int api_list_meta_gc(lua_State *L)
+{
+	hexchat_list *list = *(hexchat_list **)luaL_checkudata(L, 1, "list");
+	hexchat_list_free(ph, list);
+	return 0;
+}
+
 luaL_Reg api_hexchat[] = {
 	{"register", api_hexchat_register},
 	{"command", api_hexchat_command},
@@ -811,6 +878,7 @@ luaL_Reg api_hexchat[] = {
 	{"find_context", api_hexchat_find_context},
 	{"set_context", api_hexchat_set_context},
 	{"attrs", api_hexchat_attrs},
+	{"iterate", api_hexchat_iterate},
 	{NULL, NULL}
 };
 
@@ -836,6 +904,13 @@ luaL_Reg api_attrs_meta[] = {
 	{"__index", api_attrs_meta_index},
 	{"__newindex", api_attrs_meta_newindex},
 	{"__gc", api_attrs_meta_gc},
+	{NULL, NULL}
+};
+
+luaL_Reg api_list_meta[] = {
+	{"__index", api_list_meta_index},
+	{"__newindex", api_list_meta_newindex},
+	{"__gc", api_list_meta_gc},
 	{NULL, NULL}
 };
 
@@ -885,8 +960,13 @@ int luaopen_hexchat(lua_State *L)
 	lua_setfield(L, -2, "__index");
 	lua_pop(L, 1);
 
+
 	luaL_newmetatable(L, "attrs");
 	luaL_setfuncs(L, api_attrs_meta, 0);
+	lua_pop(L, 1);
+
+	luaL_newmetatable(L, "list");
+	luaL_setfuncs(L, api_list_meta, 0);
 	lua_pop(L, 1);
 
 	return 1;
