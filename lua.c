@@ -240,13 +240,13 @@ static int api_command_closure(char *word[], char *word_eol[], void *udata)
 	lua_rawgeti(L, LUA_REGISTRYINDEX, info->ref);
 	int i;
 	lua_newtable(L);
-	for(i = 1; *word_eol[i]; i++)
+	for(i = 1; i < 32 && *word_eol[i]; i++)
 	{
 		lua_pushstring(L, word[i]);
 		lua_rawseti(L, -2, i);
 	}
 	lua_newtable(L);
-	for(i = 1; *word_eol[i]; i++)
+	for(i = 1; i < 32 && *word_eol[i]; i++)
 	{
 		lua_pushstring(L, word_eol[i]);
 		lua_rawseti(L, -2, i);
@@ -389,13 +389,13 @@ static int api_server_closure(char *word[], char *word_eol[], void *udata)
 	lua_rawgeti(L, LUA_REGISTRYINDEX, info->ref);
 	int i;
 	lua_newtable(L);
-	for(i = 1; *word_eol[i]; i++)
+	for(i = 1; i < 32 && *word_eol[i]; i++)
 	{
 		lua_pushstring(L, word[i]);
 		lua_rawseti(L, -2, i);
 	}
 	lua_newtable(L);
-	for(i = 1; *word_eol[i]; i++)
+	for(i = 1; i < 32 && *word_eol[i]; i++)
 	{
 		lua_pushstring(L, word_eol[i]);
 		lua_rawseti(L, -2, i);
@@ -439,13 +439,13 @@ static int api_server_attrs_closure(char *word[], char *word_eol[], hexchat_even
 	lua_rawgeti(L, LUA_REGISTRYINDEX, info->ref);
 	int i;
 	lua_newtable(L);
-	for(i = 1; *word_eol[i]; i++)
+	for(i = 1; i < 32 && *word_eol[i]; i++)
 	{
 		lua_pushstring(L, word[i]);
 		lua_rawseti(L, -2, i);
 	}
 	lua_newtable(L);
-	for(i = 1; *word_eol[i]; i++)
+	for(i = 1; i < 32 && *word_eol[i]; i++)
 	{
 		lua_pushstring(L, word_eol[i]);
 		lua_rawseti(L, -2, i);
