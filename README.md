@@ -35,7 +35,6 @@ Reloads the interpreter (but not the scripts).
 The HexChat API is accessible through the `hexchat` table.
 
 ### General functions
-
 #### `hexchat.register(name, version, description)`
 Upon initialization every script should introduce itself by calling `hexchat.register`. Failure to do so will result in the script being unloaded immediately.
 
@@ -84,6 +83,98 @@ Iterate through the list `list`. To be used with generic for-loops in the follow
      for chan in hexchat.iterate"channels" do
          print(chan.server .. ": " .. chan.channel)
      end
+
+List of possible values of `list`, along with respective keys:
+* `channels` - List of channels and other tabs.
+  * `channel` - Tab name.
+  * `channelkey` - Channel's key or nil.
+  * `chantypes` - Channel types, e.g. `#!&`.
+  * `context` - Tab's context object.
+  * `flags` - Flags:
+    * 1 - Connected.
+    * 2 - Connecting.
+    * 4 - Marked away.
+    * 8 - End of MOTD.
+    * 16 - Has WHOX.
+    * 32 - Has IDMSG.
+    * 64 - Hide Join/Parts.
+    * 128 - Hide Join/Parts unset.
+    * 256 - Beep on Message.
+    * 512 - Blink Tray.
+    * 1024 - Blink Taskbar.
+    * 2048 - Logging.
+    * 4096 - Logging unset.
+    * 8192 - Scrollback.
+    * 16384 - Scrollback unset.
+    * 32768 - Strip colors.
+    * 65536 - Strip colors unset.
+  * `id` - Unique server ID.
+  * `lag` - Lag in milliseconds.
+  * `maxmodes` - Maximum modes per line.
+  * `network` - Network name.
+  * `nickprefixes` - Nickname prefixes, e.g. `@+`.
+  * `nickmodes` - Nickname mode chars, e.g. `ov`.
+  * `queue` - Number of bytes in the sendqueue.
+  * `server` - Server name to which this tab belongs.
+  * `type` - Type of the tab:
+    * 1 - Server.
+    * 2 - Channel.
+    * 3 - Dialog.
+    * 4 - Notice.
+    * 5 - SNotice.
+  * `users` - Number of users in this channel.
+* `dcc` - List of DCC file transfers.
+  * `address32` - Address of the remote user (IPv4 address).
+  * `cps` - Bytes per second (speed).
+  * `destfile` - Destination full pathname.
+  * `file` - File name.
+  * `nick` - Nickname of person who the file is from/to.
+  * `port` - TCP port number.
+  * `pos` - Bytes sent/received.
+  * `poshigh` - Bytes sent/received, high order 32 bits.
+  * `resume` - Point at which this file was resumed (or zero if it was not resumed).
+  * `resumehigh` - Point at which this file was resumed, high order 32 bits.
+  * `size` - File size in bytes, low order 32 bits.
+  * `sizehigh` - File size in bytes, high order 32 bits.
+  * `status` - Status:
+    * 0 - Queued.
+    * 1 - Active.
+    * 2 - Failed.
+    * 3 - Done.
+    * 4 - Connecting.
+    * 5 - Aborted.
+  * `type` - Type:
+    * 0 - Send.
+    * 1 - Receive.
+    * 2 - ChatRecv.
+    * 3 - ChatSend.
+* `ignore` - Current ignore list.
+  * `mask` - Ignore mask, e.g. `*!*@*.aol.com`.
+  * `flags` - Flags:
+    * 0 - Private
+    * 1 - Notice
+    * 2 - Channel
+    * 3 - CTCP
+    * 4 - Invite
+    * 5 - Unignore
+    * 6 - NoSave
+    * 7 - DCC
+* `notify` - List of people on notify.
+  * `networks` - Networks to which this nick applies. Comma separated. May be nil.
+  * `nick` - Nickname.
+  * `flags` - Flags: 1 means online, 0 means offline.
+  * `on` - Unix timestamp of when user came online.
+  * `off` - Unix timestamp of when user went offline.
+  * `seen` - Unix timestamp of when user the user was last verified still online.
+* `users` - List of users in the current channel.
+ * `account` - Account name or nil.
+ * `away` - Away status.
+ * `lasttalk` - Unix timestampf of when the user was last seen talking.
+ * `nick` - Nickname.
+ * `host` - Host name in the form: `user@host` (or nil if not known).
+ * `prefix` - Prefix status character, e.g `@` or `+`.
+ * `realname` - Real name or nil.
+ * `selected` - Selected status in the user list, only works for retrieving the user list of the focused tab.
 
 ### Preferences
 You can access HexChat's settings via the `hexchat.prefs` pseudo-table, see `/set` for a list of keys. Note that you cannot modify the table. Instead, you should use `hexchat.command"/set -quiet <key> <value>"`
@@ -194,5 +285,3 @@ Identical to `hexchat.hook_print`, except that the callback receives an addition
 
 #### `hexchat.hook_server_attrs(command, callback[, priority])`
 Identical to `hexchat.hook_server`, except that the callback receives an additional third argument with an attributes object.
-
-

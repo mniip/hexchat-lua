@@ -822,6 +822,14 @@ static int api_list_meta_index(lua_State *L)
 	char const *str = hexchat_list_str(ph, list, key);
 	if(str)
 	{
+		if(!strcmp(key, "context"))
+		{
+			hexchat_context **u = lua_newuserdata(L, sizeof(hexchat_context *));
+			*u = (hexchat_context *)str;
+			luaL_newmetatable(L, "context");
+			lua_setmetatable(L, -2);
+			return 1;
+		}
 		lua_pushstring(L, str);
 		return 1;
 	}
