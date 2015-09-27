@@ -1044,25 +1044,22 @@ size_t num_scripts = 0;
 static char *expand_buffer = NULL;
 static char const *expand_path(char const *path)
 {
-	if(path[0] != '/')
+	if(g_path_is_absolute(path))
+		return path;
+	if(path[0] == '~')
 	{
-		if(path[0] == '~')
-		{
-			if(expand_buffer)
-				g_free(expand_buffer);
-			expand_buffer = g_build_filename(getenv("HOME"), path + 1, NULL);
-			return expand_buffer;
-		}
-		else
-		{
-			if(expand_buffer)
-				g_free(expand_buffer);
-			expand_buffer = g_build_filename(hexchat_get_info(ph, "configdir"), "addons", path, NULL);
-			return expand_buffer;
-		}
+		if(expand_buffer)
+			g_free(expand_buffer);
+		expand_buffer = g_build_filename(getenv("HOME"), path + 1, NULL);
+		return expand_buffer;
 	}
 	else
-		return path;
+	{
+		if(expand_buffer)
+			g_free(expand_buffer);
+		expand_buffer = g_build_filename(hexchat_get_info(ph, "configdir"), "addons", path, NULL);
+		return expand_buffer;
+	}
 }
 
 static int is_lua_file(char const *file)
@@ -1493,7 +1490,13 @@ static int command_lua(char *word[], char *word_eol[], void *userdata)
 	return HEXCHAT_EAT_ALL;
 }
 
-int hexchat_plugin_init(hexchat_plugin *plugin_handle, char **name, char **description, char **version, char *arg)
+#if defined(_WIN32) || defined(_WIN64)
+#define EXPORT __declspec(dllexport)
+#else
+#define EXPORT
+#endif
+
+EXPORT int hexchat_plugin_init(hexchat_plugin *plugin_handle, char **name, char **description, char **version, char *arg)
 {
 	strcat(plugin_version, strchr(LUA_VERSION, ' ') + 1);
 
@@ -1518,7 +1521,7 @@ int hexchat_plugin_init(hexchat_plugin *plugin_handle, char **name, char **descr
 	return 1;
 }
 
-int hexchat_plugin_deinit(hexchat_plugin *plugin_handle)
+EXPORT int hexchat_plugin_deinit(hexchat_plugin *plugin_handle)
 {
 	size_t i;
 	int found = 0;
