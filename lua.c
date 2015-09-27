@@ -158,17 +158,21 @@ static int api_hexchat_send_modes(lua_State *L)
 	if(strlen(mode) != 2)
 		return luaL_argerror(L, 2, "expected sign followed by a mode letter");
 	int modes = luaL_optinteger(L, 3, 0);
-	const char *targets[n];
+	char const **targets = malloc(n * sizeof(char const *));
 	size_t i;
 	for(i = 0; i < n; i++)
 	{
 		lua_rawgeti(L, 1, i + 1);
 		if(lua_type(L, -1) != LUA_TSTRING)
+		{
+			free(targets);
 			return luaL_argerror(L, 1, "expected an array of strings");
+		}
 		targets[i] = lua_tostring(L, -1);
 		lua_pop(L, 1);
 	}
 	hexchat_send_modes(ph, targets, n, modes, mode[0], mode[1]);
+	free(targets);
 	return 0;
 }
 
