@@ -53,12 +53,19 @@ typedef struct
 	char *filename;
 	lua_State *state;
 	int traceback;
+	int status;
 	hook_info **hooks;
 	size_t num_hooks;
 	hook_info **unload_hooks;
 	size_t num_unload_hooks;
 }
 script_info;
+
+#define STATUS_ACTIVE 1
+#define STATUS_DEFERRED_UNLOAD 2
+#define STATUS_DEFERRED_RELOAD 4
+
+void check_deferred(script_info *info);
 
 inline script_info *get_info(lua_State *L)
 {
@@ -235,7 +242,8 @@ static int api_command_closure(char *word[], char *word_eol[], void *udata)
 {
 	hook_info *info = udata;
 	lua_State *L = info->state;
-	lua_rawgeti(L, LUA_REGISTRYINDEX, get_info(L)->traceback);
+	script_info *script = get_info(L);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, script->traceback);
 	int base = lua_gettop(L);
 	lua_rawgeti(L, LUA_REGISTRYINDEX, info->ref);
 	int i;
@@ -251,15 +259,18 @@ static int api_command_closure(char *word[], char *word_eol[], void *udata)
 		lua_pushstring(L, word_eol[i]);
 		lua_rawseti(L, -2, i);
 	}
+	script->status |= STATUS_ACTIVE;
 	if(lua_pcall(L, 2, 1, base))
 	{
 		char const *error = lua_tostring(L, -1);
 		lua_pop(L, 2);
 		hexchat_printf(ph, "Lua error in command hook: %s", error ? error : "(non-string error)");
+		check_deferred(script);
 		return HEXCHAT_EAT_NONE;
 	}
 	int ret = lua_tointeger(L, -1);
 	lua_pop(L, 2);
+	check_deferred(script);
 	return ret;
 }
 
@@ -286,7 +297,8 @@ static int api_print_closure(char *word[], void *udata)
 {
 	hook_info *info = udata;
 	lua_State *L = info->state;
-	lua_rawgeti(L, LUA_REGISTRYINDEX, get_info(L)->traceback);
+	script_info *script = get_info(L);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, script->traceback);
 	int base = lua_gettop(L);
 	lua_rawgeti(L, LUA_REGISTRYINDEX, info->ref);
 	int i, j;
@@ -299,15 +311,18 @@ static int api_print_closure(char *word[], void *udata)
 		lua_pushstring(L, word[i]);
 		lua_rawseti(L, -2, i);
 	}
+	script->status |= STATUS_ACTIVE;
 	if(lua_pcall(L, 1, 1, base))
 	{
 		char const *error = lua_tostring(L, -1);
 		lua_pop(L, 2);
 		hexchat_printf(ph, "Lua error in print hook: %s", error ? error : "(non-string error)");
+		check_deferred(script);
 		return HEXCHAT_EAT_NONE;
 	}
 	int ret = lua_tointeger(L, -1);
 	lua_pop(L, 2);
+	check_deferred(script);
 	return ret;
 }
 
@@ -333,7 +348,8 @@ static int api_print_attrs_closure(char *word[], hexchat_event_attrs *attrs, voi
 {
 	hook_info *info = udata;
 	lua_State *L = info->state;
-	lua_rawgeti(L, LUA_REGISTRYINDEX, get_info(L)->traceback);
+	script_info *script = get_info(L);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, script->traceback);
 	int base = lua_gettop(L);
 	lua_rawgeti(L, LUA_REGISTRYINDEX, info->ref);
 	int i, j;
@@ -350,15 +366,18 @@ static int api_print_attrs_closure(char *word[], hexchat_event_attrs *attrs, voi
 	*u = attrs;
 	luaL_newmetatable(L, "attrs");
 	lua_setmetatable(L, -2);
+	script->status |= STATUS_ACTIVE;
 	if(lua_pcall(L, 2, 1, base))
 	{
 		char const *error = lua_tostring(L, -1);
 		lua_pop(L, 2);
 		hexchat_printf(ph, "Lua error in print_attrs hook: %s", error ? error : "(non-string error)");
+		check_deferred(script);
 		return HEXCHAT_EAT_NONE;
 	}
 	int ret = lua_tointeger(L, -1);
 	lua_pop(L, 2);
+	check_deferred(script);
 	return ret;
 }
 
@@ -384,7 +403,8 @@ static int api_server_closure(char *word[], char *word_eol[], void *udata)
 {
 	hook_info *info = udata;
 	lua_State *L = info->state;
-	lua_rawgeti(L, LUA_REGISTRYINDEX, get_info(L)->traceback);
+	script_info *script = get_info(L);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, script->traceback);
 	int base = lua_gettop(L);
 	lua_rawgeti(L, LUA_REGISTRYINDEX, info->ref);
 	int i;
@@ -400,15 +420,18 @@ static int api_server_closure(char *word[], char *word_eol[], void *udata)
 		lua_pushstring(L, word_eol[i]);
 		lua_rawseti(L, -2, i);
 	}
+	script->status |= STATUS_ACTIVE;
 	if(lua_pcall(L, 2, 1, base))
 	{
 		char const *error = lua_tostring(L, -1);
 		lua_pop(L, 2);
 		hexchat_printf(ph, "Lua error in server hook: %s", error ? error : "(non-string error)");
+		check_deferred(script);
 		return HEXCHAT_EAT_NONE;
 	}
 	int ret = lua_tointeger(L, -1);
 	lua_pop(L, 2);
+	check_deferred(script);
 	return ret;
 }
 
@@ -434,7 +457,8 @@ static int api_server_attrs_closure(char *word[], char *word_eol[], hexchat_even
 {
 	hook_info *info = udata;
 	lua_State *L = info->state;
-	lua_rawgeti(L, LUA_REGISTRYINDEX, get_info(L)->traceback);
+	script_info *script = get_info(L);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, script->traceback);
 	int base = lua_gettop(L);
 	lua_rawgeti(L, LUA_REGISTRYINDEX, info->ref);
 	int i;
@@ -454,15 +478,18 @@ static int api_server_attrs_closure(char *word[], char *word_eol[], hexchat_even
 	*u = attrs;
 	luaL_newmetatable(L, "attrs");
 	lua_setmetatable(L, -2);
+	script->status |= STATUS_ACTIVE;
 	if(lua_pcall(L, 3, 1, base))
 	{
 		char const *error = lua_tostring(L, -1);
 		lua_pop(L, 2);
 		hexchat_printf(ph, "Lua error in server_attrs hook: %s", error ? error : "(non-string error)");
 		return HEXCHAT_EAT_NONE;
+		check_deferred(script);
 	}
 	int ret = lua_tointeger(L, -1);
 	lua_pop(L, 2);
+	check_deferred(script);
 	return ret;
 }
 
@@ -488,18 +515,22 @@ static int api_timer_closure(void *udata)
 {
 	hook_info *info = udata;
 	lua_State *L = info->state;
-	lua_rawgeti(L, LUA_REGISTRYINDEX, get_info(L)->traceback);
+	script_info *script = get_info(L);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, script->traceback);
 	int base = lua_gettop(L);
 	lua_rawgeti(L, LUA_REGISTRYINDEX, info->ref);
+	script->status |= STATUS_ACTIVE;
 	if(lua_pcall(L, 0, 1, base))
 	{
 		char const *error = lua_tostring(L, -1);
 		lua_pop(L, 2);
 		hexchat_printf(ph, "Lua error in timer hook: %s", error ? error : "(non-string error)");
+		check_deferred(script);
 		return 0;
 	}
 	int ret = lua_toboolean(L, -1);
 	lua_pop(L, 2);
+	check_deferred(script);
 	return ret;
 }
 
@@ -1060,6 +1091,7 @@ static script_info *create_script(char const *file)
 {
 	script_info *info = malloc(sizeof(script_info));
 	info->name = info->description = info->version = NULL;
+	info->status = 0;
 	info->hooks = NULL;
 	info->num_hooks = 0;
 	info->unload_hooks = NULL;
@@ -1084,6 +1116,7 @@ static script_info *create_script(char const *file)
 		free(info);
 		return NULL;
 	}
+	info->status |= STATUS_ACTIVE;
 	if(lua_pcall(L, 0, 0, base))
 	{
 		char const *error = lua_tostring(L, -1);
@@ -1152,6 +1185,7 @@ static void load_script(char const *file)
 	{
 		ARRAY_GROW(scripts, num_scripts);
 		scripts[num_scripts - 1] = info;
+		check_deferred(info);
 	}
 }
 
@@ -1162,11 +1196,39 @@ static int unload_script(char const *filename)
 	for(i = 0; i < num_scripts; i++)
 		if(!strcmp(scripts[i]->filename, expanded))
 		{
-			destroy_script(scripts[i]);
-			size_t j;
-			for(j = num_scripts - 1; j > i; j--)
-				scripts[j - 1] = scripts[j];
-			ARRAY_SHRINK(scripts, num_scripts);
+			if(scripts[i]->status & STATUS_ACTIVE)
+				scripts[i]->status |= STATUS_DEFERRED_UNLOAD;
+			else
+			{
+				destroy_script(scripts[i]);
+				size_t j;
+				for(j = num_scripts - 1; j > i; j--)
+					scripts[j - 1] = scripts[j];
+				ARRAY_SHRINK(scripts, num_scripts);
+			}
+			return 1;
+		}
+	return 0;
+}
+
+static int reload_script(char const *filename)
+{
+	size_t i;
+	char const *expanded = expand_path(filename);
+	for(i = 0; i < num_scripts; i++)
+		if(!strcmp(scripts[i]->filename, expanded))
+		{
+			if(scripts[i]->status & STATUS_ACTIVE)
+				scripts[i]->status |= STATUS_DEFERRED_RELOAD;
+			else
+			{
+				destroy_script(scripts[i]);
+				size_t j;
+				for(j = num_scripts - 1; j > i; j--)
+					scripts[j - 1] = scripts[j];
+				ARRAY_SHRINK(scripts, num_scripts);
+				load_script(filename);
+			}
 			return 1;
 		}
 	return 0;
@@ -1195,6 +1257,7 @@ static void create_interpreter()
 	interp->description = "";
 	interp->version = "";
 	interp->handle = ph;
+	interp->status = 0;
 	interp->hooks = NULL;
 	interp->num_hooks = 0;
 	interp->unload_hooks = NULL;
@@ -1250,6 +1313,7 @@ static void inject_string(script_info *info, char const *line)
 		lua_pop(L, 2);
 		return;
 	}
+	info->status |= STATUS_ACTIVE;
 	if(lua_pcall(L, 0, LUA_MULTRET, base))
 	{
 		char const *error = lua_tostring(L, -1);
@@ -1275,6 +1339,7 @@ static void inject_string(script_info *info, char const *line)
 		lua_pop(L, top - base + 1);
 	}
 	lua_pop(L, 1);
+	check_deferred(info);
 }
 
 static int command_load(char *word[], char *word_eol[], void *userdata)
@@ -1298,11 +1363,8 @@ static int command_unload(char *word[], char *word_eol[], void *userdata)
 
 static int command_reload(char *word[], char *word_eol[], void *userdata)
 {
-	if(unload_script(word[2]))
-	{
-		load_script(word[2]);
+	if(reload_script(word[2]))
 		return HEXCHAT_EAT_ALL;
-	}
 	else
 		return HEXCHAT_EAT_NONE;
 }
@@ -1322,6 +1384,48 @@ static int command_console_exec(char *word[], char *word_eol[], void *userdata)
 	return HEXCHAT_EAT_NONE;
 }
 
+void check_deferred(script_info *info)
+{
+	info->status &= ~STATUS_ACTIVE;
+	if(info->status & STATUS_DEFERRED_UNLOAD)
+	{
+		size_t i;
+		for(i = 0; i < num_scripts; i++)
+			if(scripts[i] == info)
+			{
+				destroy_script(info);
+				size_t j;
+				for(j = num_scripts - 1; j > i; j--)
+					scripts[j - 1] = scripts[j];
+				ARRAY_SHRINK(scripts, num_scripts);
+			}
+	}
+	else if(info->status & STATUS_DEFERRED_RELOAD)
+	{
+		if(info == interp)
+		{
+			destroy_interpreter();
+			create_interpreter();
+		}
+		else
+		{
+			size_t i;
+			for(i = 0; i < num_scripts; i++)
+				if(scripts[i] == info)
+				{
+					char *filename = copy_string(info->filename);
+					destroy_script(info);
+					size_t j;
+					for(j = num_scripts - 1; j > i; j--)
+						scripts[j - 1] = scripts[j];
+					ARRAY_SHRINK(scripts, num_scripts);
+					load_script(filename);
+					free(filename);
+				}
+		}
+	}
+}
+
 static int command_lua(char *word[], char *word_eol[], void *userdata)
 {
 	if(!strcmp(word[2], "load"))
@@ -1334,8 +1438,7 @@ static int command_lua(char *word[], char *word_eol[], void *userdata)
 	}
 	else if(!strcmp(word[2], "reload"))
 	{
-		if(unload_script(word[3]))
-			load_script(word[3]);
+		reload_script(word[3]);
 	}
 	else if(!strcmp(word[2], "exec"))
 	{
@@ -1359,8 +1462,13 @@ static int command_lua(char *word[], char *word_eol[], void *userdata)
 	}
 	else if(!strcmp(word[2], "reset"))
 	{
-		destroy_interpreter();
-		create_interpreter();
+		if(interp->status & STATUS_ACTIVE)
+			interp->status |= STATUS_DEFERRED_RELOAD;
+		else
+		{
+			destroy_interpreter();
+			create_interpreter();
+		}
 	}
 	else if(!strcmp(word[2], "list"))
 	{
@@ -1408,8 +1516,22 @@ int hexchat_plugin_init(hexchat_plugin *plugin_handle, char **name, char **descr
 
 int hexchat_plugin_deinit(hexchat_plugin *plugin_handle)
 {
-	destroy_interpreter();
 	size_t i;
+	int found = 0;
+	for(i = 0; i < num_scripts; i++)
+		if(scripts[i]->status & STATUS_ACTIVE)
+		{
+			found = 1;
+			break;
+		}
+	if(!found && interp && interp->status & STATUS_ACTIVE)
+		found = 1;
+	if(found)
+	{
+		hexchat_print(ph, "\00304Cannot unload the lua plugin while there are active states");
+		return 0;
+	}
+	destroy_interpreter();
 	for(i = 0; i < num_scripts; i++)
 		destroy_script(scripts[i]);
 	num_scripts = 0;
