@@ -998,6 +998,7 @@ int luaopen_hexchat(lua_State *L)
 	wrap_context(L, "command", api_hexchat_command);
 	wrap_context(L, "nickcmp", api_hexchat_nickcmp);
 	wrap_context(L, "get_info", api_hexchat_get_info);
+	wrap_context(L, "iterate", api_hexchat_iterate);
 	lua_setfield(L, -2, "__index");
 	lua_pop(L, 1);
 

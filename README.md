@@ -268,6 +268,9 @@ Compares 2 strings using casemapping from the given context. See `hexchat.nickcm
 #### `ctx:get_info(id)`
 Returns information about the given context. See `hexchat.get_info`.
 
+#### `ctx:iterate(list)`
+Iterate through a list within the given context. See `hexchat.iterate`.
+
 ### Plugin preferences
 To persistently store your script's settings, you can use the `hexchat.pluginprefs` pseudo-table. The values inside will persist across script reloads, HexChat restarts, and reboots. Currently, you can only store and read strings and numbers associated to string keys, and iterate through the table with `pairs()`.
 
