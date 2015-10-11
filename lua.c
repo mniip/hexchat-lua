@@ -86,6 +86,7 @@ static int api_hexchat_register(lua_State *L)
 	info->name = copy_string(name);
 	info->description = copy_string(description);
 	info->version = copy_string(version);
+	info->handle = hexchat_plugingui_add(ph, info->filename, info->name, info->description, info->version, NULL);
 	return 0;
 }
 
@@ -224,8 +225,8 @@ static int unregister_hook(hook_info *hook)
 		{
 			free_hook(hook);
 			size_t j;
-			for(j = info->num_hooks - 1; j > i; j--)
-				info->hooks[j - 1] = info->hooks[j];
+			for(j = i; j < info->num_hooks - 1; j++)
+				info->hooks[j] = info->hooks[j + 1];
 			ARRAY_SHRINK(info->hooks, info->num_hooks);
 			return 1;
 		}
@@ -234,8 +235,8 @@ static int unregister_hook(hook_info *hook)
 		{
 			free_hook(hook);
 			size_t j;
-			for(j = info->num_unload_hooks - 1; j > i; j--)
-				info->unload_hooks[j - 1] = info->unload_hooks[j];
+			for(j = i; j < info->num_unload_hooks - 1; j++)
+				info->unload_hooks[j] = info->unload_hooks[j + 1];
 			ARRAY_SHRINK(info->unload_hooks, info->num_unload_hooks);
 			return 1;
 		}
@@ -732,9 +733,12 @@ static int api_hexchat_prefs_meta_newindex(lua_State *L)
 
 static int api_hexchat_pluginprefs_meta_index(lua_State *L)
 {
+	script_info *script = get_info(L);
+	if(!script->name)
+		return luaL_error(L, "cannot use hexchat.pluginprefs before registering with hexchat.register");
 	char const *key = luaL_checkstring(L, 2);
 	char str[512];
-	hexchat_plugin *h = get_info(L)->handle;
+	hexchat_plugin *h = script->handle;
 	if(hexchat_pluginpref_get_str(h, key, str))
 	{
 		lua_pushstring(L, str);
@@ -752,8 +756,11 @@ static int api_hexchat_pluginprefs_meta_index(lua_State *L)
 
 static int api_hexchat_pluginprefs_meta_newindex(lua_State *L)
 {
+	script_info *script = get_info(L);
+	if(!script->name)
+		return luaL_error(L, "cannot use hexchat.pluginprefs before registering with hexchat.register");
 	char const *key = luaL_checkstring(L, 2);
-	hexchat_plugin *h = get_info(L)->handle;
+	hexchat_plugin *h = script->handle;
 	switch(lua_type(L, 3))
 	{
 		case LUA_TSTRING:
@@ -804,8 +811,11 @@ static int api_hexchat_pluginprefs_meta_pairs_closure(lua_State *L)
 
 static int api_hexchat_pluginprefs_meta_pairs(lua_State *L)
 {
+	script_info *script = get_info(L);
+	if(!script->name)
+		return luaL_error(L, "cannot use hexchat.pluginprefs before registering with hexchat.register");
 	char *dest = lua_newuserdata(L, 4096);
-	hexchat_plugin *h = get_info(L)->handle;
+	hexchat_plugin *h = script->handle;
 	if(!hexchat_pluginpref_list(h, dest))
 		strcpy(dest, "");
 	lua_pushlightuserdata(L, dest);
@@ -1093,6 +1103,7 @@ static script_info *create_script(char const *file)
 {
 	script_info *info = malloc(sizeof(script_info));
 	info->name = info->description = info->version = NULL;
+	info->handle = NULL;
 	info->status = 0;
 	info->hooks = NULL;
 	info->num_hooks = 0;
@@ -1129,6 +1140,13 @@ static script_info *create_script(char const *file)
 		for(i = 0; i < info->num_unload_hooks; i++)
 			free_hook(info->unload_hooks[i]);
 		lua_close(L);
+		if(info->name)
+		{
+			free(info->name);
+			free(info->description);
+			free(info->version);
+			hexchat_plugingui_remove(ph, info->handle);
+		}
 		free(info->filename);
 		free(info);
 		return 0;
@@ -1147,7 +1165,6 @@ static script_info *create_script(char const *file)
 		free(info);
 		return 0;
 	}
-	info->handle = hexchat_plugingui_add(ph, info->filename, info->name, info->description, info->version, NULL);
 	return info;
 }
 
@@ -1204,8 +1221,8 @@ static int unload_script(char const *filename)
 			{
 				destroy_script(scripts[i]);
 				size_t j;
-				for(j = num_scripts - 1; j > i; j--)
-					scripts[j - 1] = scripts[j];
+				for(j = i; j < num_scripts - 1; j++)
+					scripts[j] = scripts[j + 1];
 				ARRAY_SHRINK(scripts, num_scripts);
 			}
 			return 1;
@@ -1226,8 +1243,8 @@ static int reload_script(char const *filename)
 			{
 				destroy_script(scripts[i]);
 				size_t j;
-				for(j = num_scripts - 1; j > i; j--)
-					scripts[j - 1] = scripts[j];
+				for(j = i; j < num_scripts - 1; j++)
+					scripts[j] = scripts[j + 1];
 				ARRAY_SHRINK(scripts, num_scripts);
 				load_script(filename);
 			}
@@ -1397,8 +1414,8 @@ void check_deferred(script_info *info)
 			{
 				destroy_script(info);
 				size_t j;
-				for(j = num_scripts - 1; j > i; j--)
-					scripts[j - 1] = scripts[j];
+				for(j = i; j < num_scripts - 1; j++)
+					scripts[j] = scripts[j + 1];
 				ARRAY_SHRINK(scripts, num_scripts);
 			}
 	}
@@ -1418,8 +1435,8 @@ void check_deferred(script_info *info)
 					char *filename = copy_string(info->filename);
 					destroy_script(info);
 					size_t j;
-					for(j = num_scripts - 1; j > i; j--)
-						scripts[j - 1] = scripts[j];
+					for(j = i; j < num_scripts - 1; j++)
+						scripts[j] = scripts[j + 1];
 					ARRAY_SHRINK(scripts, num_scripts);
 					load_script(filename);
 					free(filename);
