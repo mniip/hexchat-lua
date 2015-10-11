@@ -13,7 +13,7 @@
 
 char plugin_name[] = "lua";
 char plugin_description[] = "Lua scripting interface";
-char plugin_version[256] = "1.0-";
+char plugin_version[256] = "1.1-";
 
 char registry_field[] = "plugin";
 char console_tab[] = ">>lua<<";
