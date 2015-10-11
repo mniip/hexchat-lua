@@ -737,17 +737,17 @@ static int api_hexchat_pluginprefs_meta_index(lua_State *L)
 	if(!script->name)
 		return luaL_error(L, "cannot use hexchat.pluginprefs before registering with hexchat.register");
 	char const *key = luaL_checkstring(L, 2);
-	char str[512];
 	hexchat_plugin *h = script->handle;
-	if(hexchat_pluginpref_get_str(h, key, str))
-	{
-		lua_pushstring(L, str);
-		return 1;
-	}
 	int r = hexchat_pluginpref_get_int(h, key);
 	if(r != -1)
 	{
 		lua_pushnumber(L, r);
+		return 1;
+	}
+	char str[512];
+	if(hexchat_pluginpref_get_str(h, key, str))
+	{
+		lua_pushstring(L, str);
 		return 1;
 	}
 	lua_pushnil(L);
@@ -790,16 +790,16 @@ static int api_hexchat_pluginprefs_meta_pairs_closure(lua_State *L)
 		lua_pushlightuserdata(L, dest);
 		lua_replace(L, lua_upvalueindex(1));
 		lua_pushstring(L, key);
-		char str[512];
-		if(hexchat_pluginpref_get_str(h, key, str))
-		{
-			lua_pushstring(L, str);
-			return 2;
-		}
 		int r = hexchat_pluginpref_get_int(h, key);
 		if(r != -1)
 		{
 			lua_pushnumber(L, r);
+			return 2;
+		}
+		char str[512];
+		if(hexchat_pluginpref_get_str(h, key, str))
+		{
+			lua_pushstring(L, str);
 			return 2;
 		}
 		lua_pushnil(L);
