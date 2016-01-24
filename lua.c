@@ -13,7 +13,7 @@
 
 char plugin_name[] = "lua";
 char plugin_description[] = "Lua scripting interface";
-char plugin_version[256] = "1.1-";
+char plugin_version[256] = "1.2-";
 
 char registry_field[] = "plugin";
 char console_tab[] = ">>lua<<";
@@ -646,6 +646,14 @@ static inline void wrap_context(lua_State *L, char const *field, lua_CFunction f
 	lua_setfield(L, -2, field);
 }
 
+static int api_hexchat_context_meta_eq(lua_State *L)
+{
+	hexchat_context *this = *(hexchat_context **)luaL_checkudata(L, 1, "context");
+	hexchat_context *that = *(hexchat_context **)luaL_checkudata(L, 2, "context");
+	lua_pushboolean(L, this == that);
+	return 1;
+}
+
 static int api_hexchat_get_info(lua_State *L)
 {
 	char const *key = luaL_checkstring(L, 1);
@@ -1010,6 +1018,8 @@ int luaopen_hexchat(lua_State *L)
 	wrap_context(L, "get_info", api_hexchat_get_info);
 	wrap_context(L, "iterate", api_hexchat_iterate);
 	lua_setfield(L, -2, "__index");
+	lua_pushcfunction(L, api_hexchat_context_meta_eq);
+	lua_setfield(L, -2, "__eq");
 	lua_pop(L, 1);
 
 

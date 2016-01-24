@@ -239,7 +239,7 @@ Hooks the function `callback` to be executed when the current script is unloaded
 Removes the given hook. A hook can only be removed once.
 
 ### Contexts
-A context corresponds to a HexChat window or tab. Some of the functions in `hexchat.*` will do something in the current tab. Using contexts you can perform such actions in other tabs instead.
+A context corresponds to a HexChat window or tab. Some of the functions in `hexchat.*` will do something in the current tab. Using contexts you can perform such actions in other tabs instead. Two context objects can be tested for equality using the `==` operator, which will return true if the contexts refer to the same tab.
 
 #### `hexchat.get_context()`
 Returns a context object for the current context.
