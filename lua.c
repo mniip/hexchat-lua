@@ -7,6 +7,11 @@
 #include <lualib.h>
 
 #include <glib.h>
+#include <gmodule.h>
+
+#ifndef G_OS_WIN32
+#include <pwd.h>
+#endif
 
 #include <hexchat-plugin.h>
 
@@ -1077,14 +1082,42 @@ static char const *expand_path(char const *path)
 {
 	if(g_path_is_absolute(path))
 		return path;
+#ifndef G_OS_WIN32
 	if(path[0] == '~')
 	{
-		if(expand_buffer)
-			g_free(expand_buffer);
-		expand_buffer = g_build_filename(getenv("HOME"), path + 1, NULL);
-		return expand_buffer;
+		if(!path[1] || path[1] == '/')
+		{
+			if(expand_buffer)
+				g_free(expand_buffer);
+			expand_buffer = g_build_filename(g_get_home_dir(), path + 1, NULL);
+			return expand_buffer;
+		}
+		else
+		{
+			char *user = copy_string(path + 1);
+			char *slash_pos = strchr(user, '/');
+			if(slash_pos)
+				*slash_pos = 0;
+			struct passwd *pw = getpwnam(user);
+			free(user);
+			if(pw)
+			{
+				slash_pos = strchr(path, '/');
+				if(!slash_pos)
+					return pw->pw_dir;
+				if(expand_buffer)
+					g_free(expand_buffer);
+				expand_buffer = g_strconcat(pw->pw_dir, slash_pos, NULL);
+				return expand_buffer;
+			}
+			else
+			{
+				return path;
+			}
+		}
 	}
 	else
+#endif
 	{
 		if(expand_buffer)
 			g_free(expand_buffer);
@@ -1528,13 +1561,7 @@ static int command_lua(char *word[], char *word_eol[], void *userdata)
 	return HEXCHAT_EAT_ALL;
 }
 
-#if defined(_WIN32) || defined(_WIN64)
-#define EXPORT __declspec(dllexport)
-#else
-#define EXPORT
-#endif
-
-EXPORT int hexchat_plugin_init(hexchat_plugin *plugin_handle, char **name, char **description, char **version, char *arg)
+G_MODULE_EXPORT int hexchat_plugin_init(hexchat_plugin *plugin_handle, char **name, char **description, char **version, char *arg)
 {
 	strcat(plugin_version, strchr(LUA_VERSION, ' ') + 1);
 
@@ -1559,7 +1586,7 @@ EXPORT int hexchat_plugin_init(hexchat_plugin *plugin_handle, char **name, char 
 	return 1;
 }
 
-EXPORT int hexchat_plugin_deinit(hexchat_plugin *plugin_handle)
+G_MODULE_EXPORT int hexchat_plugin_deinit(hexchat_plugin *plugin_handle)
 {
 	size_t i;
 	int found = 0;
