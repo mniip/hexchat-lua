@@ -15,8 +15,18 @@ char plugin_name[] = "lua";
 char plugin_description[] = "Lua scripting interface";
 char plugin_version[256] = "1.2-";
 
-char registry_field[] = "plugin";
 char console_tab[] = ">>lua<<";
+char command_help[] = 
+	"Usage: /lua load <filename>\n"
+	"            unload <filename>\n"
+	"            reload <filename>\n"
+	"            exec <code>\n"
+	"            inject <filename> <code>\n"
+	"            reset\n"
+	"            list\n"
+	"            console";
+
+char registry_field[] = "plugin";
 
 hexchat_plugin *ph;
 
@@ -1538,7 +1548,7 @@ EXPORT int hexchat_plugin_init(hexchat_plugin *plugin_handle, char **name, char 
 	hexchat_hook_command(ph, "LOAD", HEXCHAT_PRI_NORM, command_load, NULL, NULL);
 	hexchat_hook_command(ph, "UNLOAD", HEXCHAT_PRI_NORM, command_unload, NULL, NULL);
 	hexchat_hook_command(ph, "RELOAD", HEXCHAT_PRI_NORM, command_reload, NULL, NULL);
-	hexchat_hook_command(ph, "lua", HEXCHAT_PRI_NORM, command_lua, NULL, NULL);
+	hexchat_hook_command(ph, "lua", HEXCHAT_PRI_NORM, command_lua, command_help, NULL);
 
 	hexchat_printf(ph, "%s version %s loaded.\n", plugin_name, plugin_version);
 
