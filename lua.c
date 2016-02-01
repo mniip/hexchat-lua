@@ -1506,11 +1506,13 @@ static int command_lua(char *word[], char *word_eol[], void *userdata)
 	}
 	else if(!strcmp(word[2], "unload"))
 	{
-		unload_script(word[3]);
+		if(!unload_script(word[3]))
+			hexchat_printf(ph, "Could not find a script by the name '%s'", word[3]);
 	}
 	else if(!strcmp(word[2], "reload"))
 	{
-		reload_script(word[3]);
+		if(!reload_script(word[3]))
+			hexchat_printf(ph, "Could not find a script by the name '%s'", word[3]);
 	}
 	else if(!strcmp(word[2], "exec"))
 	{
