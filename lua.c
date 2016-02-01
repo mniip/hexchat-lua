@@ -1167,14 +1167,25 @@ static script_info *create_script(char const *file)
 	prepare_state(L, info);
 	lua_rawgeti(L, LUA_REGISTRYINDEX, info->traceback);
 	int base = lua_gettop(L);
-	if(luaL_loadfile(L, info->filename))
+	char *filename_fs = g_filename_from_utf8(info->filename, -1, NULL, NULL, NULL);
+	if(!filename_fs)
 	{
+		hexchat_printf(ph, "Invalid filename: %s", info->filename);
+		lua_close(L);
+		g_free(info->filename);
+		free(info);
+		return NULL;
+	}
+	if(luaL_loadfile(L, filename_fs))
+	{
+		g_free(filename_fs);
 		hexchat_printf(ph, "Lua syntax error: %s", luaL_optstring(L, -1, ""));
 		lua_close(L);
 		g_free(info->filename);
 		free(info);
 		return NULL;
 	}
+	g_free(filename_fs);
 	info->status |= STATUS_ACTIVE;
 	if(lua_pcall(L, 0, 0, base))
 	{
