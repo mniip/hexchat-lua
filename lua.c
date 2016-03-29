@@ -1497,6 +1497,7 @@ void check_deferred(script_info *info)
 					ARRAY_SHRINK(scripts, num_scripts);
 					load_script(filename);
 					g_free(filename);
+					break;
 				}
 		}
 	}
