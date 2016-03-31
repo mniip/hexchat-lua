@@ -631,8 +631,9 @@ static int api_hexchat_get_context(lua_State *L)
 static int api_hexchat_set_context(lua_State *L)
 {
 	hexchat_context *context = *(hexchat_context **)luaL_checkudata(L, 1, "context");
-	hexchat_set_context(ph, context);
-	return 0;
+	int success = hexchat_set_context(ph, context);
+	lua_pushboolean(L, success);
+	return 1;
 }
 
 static int wrap_context_closure(lua_State *L)
