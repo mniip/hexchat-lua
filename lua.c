@@ -1108,6 +1108,21 @@ static void patch_pairs(lua_State *L)
 	lua_setglobal(L, "pairs");
 }
 
+static void patch_clibs(lua_State *L)
+{
+	lua_pushnil(L);
+	while(lua_next(L, LUA_REGISTRYINDEX))
+	{
+		if(lua_type(L, -2) == LUA_TLIGHTUSERDATA && lua_type(L, -1) == LUA_TTABLE)
+		{
+			lua_setfield(L, LUA_REGISTRYINDEX, "_CLIBS");
+			break;
+		}
+		lua_pop(L, 1);
+	}
+	lua_pop(L, 1);
+}
+
 script_info **scripts = NULL;
 size_t num_scripts = 0;
 
@@ -1172,6 +1187,8 @@ static void prepare_state(lua_State *L, script_info *info)
 	luaL_openlibs(L);
 	if(LUA_VERSION_NUM < 502)
 		patch_pairs(L);
+	if(LUA_VERSION_NUM > 502)
+		patch_clibs(L);
 	lua_getglobal(L, "debug");
 	lua_getfield(L, -1, "traceback");
 	info->traceback = luaL_ref(L, LUA_REGISTRYINDEX);
