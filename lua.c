@@ -642,7 +642,8 @@ static int wrap_context_closure(lua_State *L)
 	lua_pushvalue(L, lua_upvalueindex(1));
 	lua_replace(L, 1);
 	hexchat_context *old = hexchat_get_context(ph);
-	hexchat_set_context(ph, context);
+	if(!hexchat_set_context(ph, context))
+		return luaL_error(L, "could not switch into context");
 	lua_call(L, lua_gettop(L) - 1, LUA_MULTRET);
 	hexchat_set_context(ph, old);
 	return lua_gettop(L);

@@ -239,7 +239,7 @@ Hooks the function `callback` to be executed when the current script is unloaded
 Removes the given hook. A hook can only be removed once.
 
 ### Contexts
-A context corresponds to a HexChat window or tab. Some of the functions in `hexchat.*` will do something in the current tab. Using contexts you can perform such actions in other tabs instead. Two context objects can be tested for equality using the `==` operator, which will return true if the contexts refer to the same tab.
+A context corresponds to a HexChat window or tab. Some of the functions in `hexchat.*` will do something in the current tab. Using contexts you can perform such actions in other tabs instead. Two context objects can be tested for equality using the `==` operator, which will return true if the contexts refer to the same tab. All methods of a context object will error if the object is invalidated and points to a tab that is closed.
 
 #### `hexchat.get_context()`
 Returns a context object for the current context.
@@ -248,7 +248,7 @@ Returns a context object for the current context.
 Finds a context object for a tab on the given channel of the given channel. If `server_name` is nil, it searches for the given channel or query across all servers. If `channel_name` is nil, finds the frontmost tab of the given server. If both are `nil`, returns current context. In any case, if the specified tab was not found, the function returns nil.
 
 #### `ctx:set()` and `hexchat.set_context(ctx)`
-Makes `ctx` the "current" context. All `hexchat.*` will be using this context. This setting only persists within one event. Next time any of the callbacks is called, the current context will be set to the actual one.
+Makes `ctx` the "current" context. All `hexchat.*` will be using this context. This setting only persists within one event. Next time any of the callbacks is called, the current context will be set to the actual one. Returns a boolean indicating whether the context was successfully set.
 
 #### `ctx:find_context(server_name, channel_name)`
 Identical to `hexchat.find_context`, except the defaults are based on the current context.
