@@ -357,6 +357,13 @@ static int api_hexchat_hook_print(lua_State *L)
 	return 1;
 }
 
+static hexchat_event_attrs *event_attrs_copy(const hexchat_event_attrs *attrs)
+{
+	hexchat_event_attrs *copy = hexchat_event_attrs_create(ph);
+	copy->server_time_utc = attrs->server_time_utc;
+	return copy;
+}
+
 static int api_print_attrs_closure(char *word[], hexchat_event_attrs *attrs, void *udata)
 {
 	hook_info *info = udata;
@@ -376,7 +383,7 @@ static int api_print_attrs_closure(char *word[], hexchat_event_attrs *attrs, voi
 		lua_rawseti(L, -2, i);
 	}
 	hexchat_event_attrs **u = lua_newuserdata(L, sizeof(hexchat_event_attrs *));
-	*u = attrs;
+	*u = event_attrs_copy(attrs);
 	luaL_newmetatable(L, "attrs");
 	lua_setmetatable(L, -2);
 	script->status |= STATUS_ACTIVE;
@@ -488,7 +495,7 @@ static int api_server_attrs_closure(char *word[], char *word_eol[], hexchat_even
 		lua_rawseti(L, -2, i);
 	}
 	hexchat_event_attrs **u = lua_newuserdata(L, sizeof(hexchat_event_attrs *));
-	*u = attrs;
+	*u = event_attrs_copy(attrs);
 	luaL_newmetatable(L, "attrs");
 	lua_setmetatable(L, -2);
 	script->status |= STATUS_ACTIVE;
