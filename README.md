@@ -176,6 +176,9 @@ List of possible values of `list`, along with respective keys:
  * `realname` - Real name or nil.
  * `selected` - Selected status in the user list, only works for retrieving the user list of the focused tab.
 
+#### `hexchat.props`
+A table containing the values of a `"channels"` list for the current context.
+
 ### Preferences
 You can access HexChat's settings via the `hexchat.prefs` pseudo-table, see `/set` for a list of keys. Note that you cannot modify the table. Instead, you should use `hexchat.command"/set -quiet <key> <value>"`
 
